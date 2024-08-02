@@ -76,6 +76,11 @@ input_path  <- fix_path(input_path)
 output_path <- fix_path(output_path)
 
 
+### Clean specific values -----------------------------------------------------#
+
+census_key <- str_trim(census_key)
+fred_key   <- str_trim(fred_key)
+
 ### Recast to correct data types ----------------------------------------------#
 
 inputs_to_numericize <- c("kid_age_thres_p")
@@ -161,15 +166,19 @@ age_aggs <-
 
 ### prepare inputs for map generation -----------------------------------------#
 
-map_geos <- 
-  map_geos %>% 
-  str_split(pattern = ",") %>% 
-  unlist() %>% 
-  str_trim()
+if (exists("map_geos")) {
+  map_geos <- 
+    map_geos %>% 
+    str_split(pattern = ",") %>% 
+    unlist() %>% 
+    str_trim()  
+}
 
-map_geo_level <-
-  case_match(map_geo_level,
-             "School District(s)"                      ~ "school",
-             "Zip Code(s)"                             ~ "zcta",
-             "County (or Counties)"                    ~ "county",
-             "Custom Geography (to be provided below)" ~ "aux")
+if (exists("map_geo_level")) {
+  map_geo_level <-
+    case_match(map_geo_level,
+               "School District(s)"                      ~ "school",
+               "Zip Code(s)"                             ~ "zcta",
+               "County (or Counties)"                    ~ "county",
+               "Custom Geography (to be provided below)" ~ "aux")
+}
