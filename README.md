@@ -74,12 +74,12 @@ To update with new CPS basic monthly file:
 5. Add newly released sample
 6. Click "Submit Sample Selections"
 7. Download the data and DDI in the input folder.
-8. Update the data file name (cps_000XX) in the `settings--config.R`
+8. Update the data file name (cps_000XX) in the Excel Interface file
 9. Run the code
 
 To update with new ACS 1-year or 5-year:
 
-1. Assign new year to `base_year` or `acs5_year` in the `settings--config.R`
+1. Update the "base year" field in the Excel Interface file
 2. Run the code
 
 # Data Sources and their Uses
