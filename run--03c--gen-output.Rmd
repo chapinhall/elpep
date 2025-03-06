@@ -233,7 +233,7 @@ if (my_state_abbr == "IL") {
 write_agg_output(outcomes_regex = outcomes_out_regex,
                  #age_regex      = "age(_3$|_4$|_infant$|_toddler$)", # "_0to2|_3to5|_0to5|_6to12"
                  agg_levels     = lAgg_for_output,
-                 recency        = "most_recent",
+                 recency        = "most_recent",                      # "allbase" for calendar year of base_year + 1
                  out_label      = local_ccdf_name_short)
 
 ```

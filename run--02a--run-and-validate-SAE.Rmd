@@ -16,7 +16,7 @@ if (!"direct_est_tract"     %in% objects()) source_rmd("method--small-area-estim
 
 ```{r load data for SAE runs}
 # Load prepped data
-for (f in c("acs1", "acs5", "pop")) {
+for (f in c("acs1", "acs5", "pop", "geo")) {
   load(file = glue("{output_path}{f}_data_{my_output_tag}.Rda"))
 }
 ```

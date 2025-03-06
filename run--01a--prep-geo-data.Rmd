@@ -427,18 +427,17 @@ if (my_state_abbr == "ME") {
 # Crosswalk can be downloaded from the National Center for Education Statistics
 # Reference: https://nces.ed.gov/programs/edge/geographic/relationshipfiles
 # Note that school districts are updated every year
-grffile <- glue("{input_path}grf23_lea_tract.xlsx")
+grffile <- glue("{input_path}GRF24/grf24_lea_tract.xlsx")
 if (!file.exists(grffile)) {
-  download.file(url      = glue("https://nces.ed.gov/programs/edge/data/GRF23.zip"),
-            destfile = glue("{input_path}GRF23.zip"))
-  unzip(glue("{input_path}GRF23.zip"),
-        files = "grf23_lea_tract.xlsx",
+  download.file(url      = glue("https://nces.ed.gov/programs/edge/data/GRF24.zip"),
+            destfile = glue("{input_path}GRF24.zip"))
+  unzip(glue("{input_path}GRF24.zip"),
         exdir = str_replace(input_path, "\\/$", ""))
 }
 
 geo_crosswalk_sd <-
   readxl::read_xlsx(grffile) %>% 
-  rename(school = NAME_LEA23,
+  rename(school = NAME_LEA24,
          GEOID  = TRACT) %>% 
   mutate(STATEFIP = substr(GEOID, 1, 2),
          LANDAREA = as.numeric(LANDAREA)) %>% 
@@ -681,9 +680,10 @@ if (exists("my_aux_geo")) {
 
 ```{r add Birth to Five Council for Illinois}
 if (my_state_abbr == "IL") {
-  b5_sd_file <- glue("{input_path}BirthToFive_SD2023_lookup.xlsx")
+  b5_sd_file <- glue("{input_path}BirthToFive_SD_lookup2023_2024.xlsx")
   b5_sd <-
-    readxl::read_xlsx(b5_sd_file) %>% 
+    readxl::read_xlsx(b5_sd_file,
+                      sheet = "Sheet1") %>% 
     rename(school = SchoolDistrict_NAME_Census,
            b5     = BirthToFive_regionlabel)
   

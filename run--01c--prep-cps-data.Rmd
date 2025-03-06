@@ -55,7 +55,7 @@ cps_sub <-
                                            # See https://cps.ipums.org/cps/cps_linking_documentation.shtml
     (!STATEFIP %in% c(2, 15))          &   # This excludes HI and AK
      between(RELATE, 101, 1001)] %>%        # This subsets to only related members of the household
-  dplyr::select(-COUNTY, -OCC, -CLASSWKR, -FAMID) # dropping variables not currently used.
+  dplyr::select(-COUNTY, -OCC, -CLASSWKR) # dropping variables not currently used.
 
 rm(cps)
 gc()
