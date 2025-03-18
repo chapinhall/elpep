@@ -8,3 +8,4 @@ run--00--main-doc_files/
 # Also eliminate tracking of rendered reports that are specific to a given user's run of the method
 *.html
 
+.Rproj.user

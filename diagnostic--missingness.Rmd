@@ -1,0 +1,137 @@
+---
+title: "diagnostic--missingness"
+output: html_document
+date: "2024-10-24"
+---
+
+```{r user specified-elpep customization file}
+elpep_customization_file <- "C:/Users/kang-hyein/OneDrive - National Opinion Research Center/Documents/ELPEP/Interface for Specifying Custom ELPEP Eligibility Estimates - IECAM_May2024.xlsm"
+```
+
+```{r}
+# These lines reset the run and load all packages necessary for further steps
+rm(list = setdiff(ls(), "elpep_customization_file"))
+source("settings--main.R")
+```
+
+```{r}
+# This line runs a script to harvest all details specified in the customization file
+source("method--read-customization-file.R")
+```
+
+```{r setup}
+rm(`_xlnm._FilterDatabase`, age_aggs, geo_levels, income_scale, state_abbrevs, states, tf)
+
+my_output_tag <- "ILApr2024"
+
+missing_0to2 <- function(my_data) {
+  my_data <- my_data %>% 
+    filter(GEOID %in% c("17019011100", "17031030103", "17031271300", "17031282800", "17031612000", 
+                        "17095000800", "17097863003", "17115002001", "17143001200", "17157951202", 
+                        "17161024400", "17163501200", "17197980100"))
+  return(my_data)
+}
+
+missing_6to12 <- function(my_data) {
+  my_data <- my_data %>% 
+    filter(GEOID %in% c("17031010400", "17031010501", "17031030706", "17031080201", "17031081700", 
+                        "17031350100", "17031431200", "17031670200", "17031836600", "17031839100", 
+                        "17031839200", "17077011001", "17109010401", "17115000502", "17115002100", 
+                        "17115002905", "17163502401", "17167001400"))
+  return(my_data)
+}
+```
+
+```{r test 03b product}
+# Load final aggregated output
+load(file = glue("{output_path}Final ELPEP Estimates in Multiple Geographic Aggregates - {my_output_tag}.Rda"))
+rm(nowcast_agg_aux, nowcast_agg_cty, nowcast_agg_sd, nowcast_agg_zip)
+
+missing_0to2(nowcast_agg_tract) %>% 
+  tabyl(age)
+
+missing_6to12(nowcast_agg_tract) %>% 
+  tabyl(age)
+```
+
+```{r test 03a product}
+load(file = glue("{output_path}Now-cast counts at the tract level, pre-disaggregation - {my_output_tag}.Rda"))
+
+missing_0to2(nowcast_parallel_counts) %>% 
+  tabyl(age)
+
+missing_6to12(nowcast_parallel_counts) %>% 
+  tabyl(age)
+```
+
+```{r test 02b}
+load(file = glue("{output_path}Eligibility estimates using conditional transition ratio - {my_output_tag}.Rda"))
+
+missing_0to2(nowcast_out) %>% 
+  tabyl(age_0to5_count)
+
+missing_6to12(nowcast_out) %>% 
+  tabyl(age_6to12_count)
+
+missing_6to12(nowcast_out) %>% 
+  filter(age_6to12_count != 0) %>% 
+  tabyl(GEOID)
+
+missing_6to12(nowcast_out) %>% 
+  filter(age_6to12_count == 0) %>% 
+  tabyl(GEOID)
+
+
+
+```
+
+
+```{r}
+missing_6to12(nowcast_out) %>% 
+  filter(age_6to12_count != 0) %>% 
+  summary()
+```
+
+
+```{r test 02a}
+load(file = glue("{output_path}sae_sensitivity_estimates_{my_output_tag}.Rda")) 
+```
+
+```{r test 01d}
+acs5_filename <- glue("{output_path}acs5_variables_{my_output_tag}.csv")
+
+acs5tract <- 
+  fread(acs5_filename) %>% 
+  rename(GEOID = geo_val)
+
+acs5tract %>% 
+  filter(age_0to5_count == 0) %>% 
+  tabyl(GEOID)
+
+missing_0to2(acs5tract) %>% 
+  select(GEOID, matches("^age.*count$")) %>% 
+  tabyl(age_0to5_count)
+
+missing_6to12(acs5tract) %>% 
+  select(GEOID, matches("^age.*count$")) %>% 
+  tabyl(age_6to12_count)
+
+acs5tract %>% filter(age_0to5_count == 0) %>% sapply(function(x) mean(is.na(x))) %>% sort()
+acs5tract %>% filter(age_6to12_count == 0) %>% sapply(function(x) mean(is.na(x))) %>% sort() # select(GEOID, age_6to12_count) %>% nrow()
+missing_6to12(acs5tract) %>% sapply(function(x) mean(is.na(x))) %>% sort() # select(GEOID, age_6to12_count) %>% nrow()
+
+```
+
+```{r}
+missing_0to2(acs5tract) %>% sapply(function(x) mean(is.na(x))) %>% sort()
+missing_6to12(acs5tract) %>% sapply(function(x) mean(is.na(x))) %>% sort()
+
+acs5tract %>% 
+  filter(GEOID %in% c("17031010501", "17031030706", "17031080201", "17031431200", "17031670200", "17031836600", "17031839200", "17109010401", "17115000502", "17115002100", 
+                        "17115002905")) %>% sapply(function(x) mean(is.na(x))) %>% sort()
+
+acs5tract %>% 
+  filter(GEOID %in% c("17031010501", "17031030706", "17031080201", "17031431200", "17031670200", "17031836600", "17031839200", "17109010401", "17115000502", "17115002100", 
+                        "17115002905")) %>% select(matches("incpov_6to11"))
+
+```

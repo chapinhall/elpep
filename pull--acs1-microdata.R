@@ -31,10 +31,13 @@ rel_var <- ifelse(base_year <= 2018,
                   "RELP",
                   "RELSHIPP")
 
+st_var <- ifelse(base_year <= 2022,
+                 "ST",
+                 "STATE")
 pull_vars <- 
-  c("SERIALNO", "ST", "PUMA", "FS", "SPORDER", rel_var, "SEX", "AGEP", 
+  c("SERIALNO", st_var, "PUMA", "FS", "SPORDER", rel_var, "SEX", "AGEP", 
     "RAC2P", "HISP", "SCH", "SCHL", "ESR", "COW", "OCCP", "INDP", "FINCP", 
-    "POVPIP", "PWGTP", "WGTP", "TYPEHUGQ")
+    "POVPIP", "TYPEHUGQ")
 
 # View all available variables for acs1
 if (FALSE) {
@@ -84,9 +87,10 @@ acs1 <-
       str_replace("GQ", "01") %>%
       as.numeric(),
 
+    WGTP     = as.numeric(WGTP),
     AGEP     = as.numeric(AGEP),
     PUMA     = as.numeric(PUMA),
-    ST       = as.numeric(ST),
+    st_var   = as.numeric(get(st_var)),
     FS       = as.numeric(FS),
     rel_var  = as.numeric(get(rel_var)),
     SEX      = as.numeric(SEX),

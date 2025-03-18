@@ -69,7 +69,7 @@ my_state_fip <-
 
 acs1 <- 
   acs1[TYPEHUGQ %in% c(1) &
-         ST == my_state_fip &
+         STATE == my_state_fip &
          YEAR == max(YEAR)]
 
 # If county has been specified, load geographic data to perform subsetting to

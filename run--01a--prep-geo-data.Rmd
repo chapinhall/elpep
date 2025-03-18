@@ -148,7 +148,7 @@ geo_crosswalk_zcta_2010 %>%
   # Correlation is 0.8, after trimming away extremes with respect to population pct  
 ```
 
-```{r auto pull of tract, puma and school district shapefiles}
+```{r auto pull of tract, puma, county, and school district shapefiles}
 # Declare which vintage of Census TIGER shapefiles should be pulled
 tiger_year <- base_year
 
@@ -165,22 +165,42 @@ try(zctaShp   <-    zctas(cb = TRUE, year = tiger_year, starts_with = zcta_start
   # the zctas() function can only return by state for years 2000 and 2010 
 
 # Download school district file from Census using tigris package
-elShp <- school_districts(state = {my_state_fip}, type = 'elementary', year = tiger_year)
-scShp <- school_districts(state = {my_state_fip}, type = 'secondary',  year = tiger_year)
-unShp <- school_districts(state = {my_state_fip}, type = 'unified',    year = tiger_year)
+elShp <- school_districts(state = {my_state_fip}, type = 'elementary', year = tiger_year + 1)
+scShp <- school_districts(state = {my_state_fip}, type = 'secondary',  year = tiger_year + 1)
+unShp <- school_districts(state = {my_state_fip}, type = 'unified',    year = tiger_year + 1)
 
 # Clean data
 schoolShp <- 
   bind_rows(elShp %>% mutate(level = "elementary"), 
-            scShp %>% mutate(level = "secondary"), 
             unShp %>% mutate(level = "unified"))
-rm(elShp, scShp, unShp)
+
+schoolShp_sec_included <- 
+  bind_rows(elShp %>% mutate(level = "elementary"), 
+            scShp %>% mutate(level = "secondary"),
+            unShp %>% mutate(level = "unified"))
 
 # Display school district shapefile
 ggplot() + 
   geom_sf(data = schoolShp,
           aes(fill = level)) +
   theme_void()
+
+ggplot() +
+    geom_sf(data = schoolShp_sec_included %>% filter(level == "elementary"),
+            color = "red",   
+            fill = NA) +
+    geom_sf(data = schoolShp_sec_included %>% filter(level == "unified"),
+            color = NA, 
+            fill = "yellow",
+            alpha = 0.2) + 
+    geom_sf(data = schoolShp_sec_included %>% filter(level == "secondary"),
+            color = NA, 
+            fill = "blue",
+            alpha = 0.2) + 
+    theme_void()
+  
+# We only use elementary and unified school districts.
+rm(elShp, unShp, scShp, schoolShp_sec_included)
 ```
 
 ```{r pull puma and zcta shapefiles from Census website if not available from the tigris package pulls above}
@@ -260,142 +280,145 @@ schoolShp <-
            skip_absent = TRUE)
 ```
 
-```{r examine potential issues with geography}
-# Plot overlap to examine any potential issues
-ggplot() +
-  geom_sf(data = tractShp %>% filter(COUNTYFIP == "005"), #005 is Cumberland county, where Portland (largest population) is located.
-          color = "red",   
-          fill = NA) +
-  geom_sf(data = schoolShp %>% filter(GEOID %in% c(2300009, 2303780, 2303930, 2305670, 2306060, 2309930, 2310530, 2310710, 
-                                               2312330, 2313560, 2314100, 2314210, 2314240, 2314771, 2314793, 2314837 # list of SDs that's related to county of 005 only
-                                               # 2310770, 2311790, 2314190, 2314768, 2314789 # list of SDs that's related to county of 005 and other counties
-                                               )),
-          color = "green", 
-          fill = NA,
-          alpha = 0.2) + 
-  theme_void()
-
-#school districts that are smaller than tract
-ggplot() +
-  geom_sf(data = tractShp %>% filter(COUNTYFIP == "005"),
-          color = "red",   
-          fill = NA) +
-  geom_sf(data = schoolShp %>% filter(GEOID == 2314837),
-          color = NA, 
-          fill = "green",
-          alpha = 0.2) + 
-  theme_void()
-
-#m:m tract-SD
-ggplot() +
-  geom_sf(data = tractShp %>% filter(GEOID == "23003950100"),
-          color = "red",   
-          fill = NA) +
-  geom_sf(data = schoolShp %>% filter(school == "Caswell"),
-          color = NA, 
-          fill = "green",
-          alpha = 0.2) + 
-  geom_sf(data = schoolShp %>% filter(school == "New Sweden"),
-          color = NA, 
-          fill = "yellow",
-          alpha = 0.2) + 
-  geom_sf(data = schoolShp %>% filter(school == "School Administrative District 24"),
-          color = NA, 
-          fill = "yellowgreen",
-          alpha = 0.2) + 
-  geom_sf(data = schoolShp %>% filter(school == "Westmanland"),
-          color = NA, 
-          fill = "blue",
-          alpha = 0.2) + 
-  geom_sf(data = schoolShp %>% filter(school == "Regional School Unit 39"),
-          color = NA, 
-          fill = "purple",
-          alpha = 0.2) + 
-  geom_sf(data = schoolShp %>% filter(school == "Aroostook Unorganized Territory"),
-          color = NA, 
-          fill = "gray",
-          alpha = 0.2) + 
-  theme_void()
-
+```{r examine potential issues with geography for Maine}
+if (my_state_abbr == "ME") {
+  # Plot overlap to examine any potential issues
+  ggplot() +
+    geom_sf(data = tractShp %>% filter(COUNTYFIP == "005"), #005 is Cumberland county, where Portland (largest population) is located.
+            color = "red",   
+            fill = NA) +
+    geom_sf(data = schoolShp %>% filter(GEOID %in% c(2300009, 2303780, 2303930, 2305670, 2306060, 2309930, 2310530, 2310710, 
+                                                     2312330, 2313560, 2314100, 2314210, 2314240, 2314771, 2314793, 2314837 # list of SDs that's related to county of 005 only
+                                                     # 2310770, 2311790, 2314190, 2314768, 2314789 # list of SDs that's related to county of 005 and other counties
+    )),
+    color = "green", 
+    fill = NA,
+    alpha = 0.2) + 
+    theme_void()
+  
+  #school districts that are smaller than tract
+  ggplot() +
+    geom_sf(data = tractShp %>% filter(COUNTYFIP == "005"),
+            color = "red",   
+            fill = NA) +
+    geom_sf(data = schoolShp %>% filter(GEOID == 2314837),
+            color = NA, 
+            fill = "green",
+            alpha = 0.2) + 
+    theme_void()
+  
+  #m:m tract-SD
+  ggplot() +
+    geom_sf(data = tractShp %>% filter(GEOID == "23003950100"),
+            color = "red",   
+            fill = NA) +
+    geom_sf(data = schoolShp %>% filter(school == "Caswell"),
+            color = NA, 
+            fill = "green",
+            alpha = 0.2) + 
+    geom_sf(data = schoolShp %>% filter(school == "New Sweden"),
+            color = NA, 
+            fill = "yellow",
+            alpha = 0.2) + 
+    geom_sf(data = schoolShp %>% filter(school == "School Administrative District 24"),
+            color = NA, 
+            fill = "yellowgreen",
+            alpha = 0.2) + 
+    geom_sf(data = schoolShp %>% filter(school == "Westmanland"),
+            color = NA, 
+            fill = "blue",
+            alpha = 0.2) + 
+    geom_sf(data = schoolShp %>% filter(school == "Regional School Unit 39"),
+            color = NA, 
+            fill = "purple",
+            alpha = 0.2) + 
+    geom_sf(data = schoolShp %>% filter(school == "Aroostook Unorganized Territory"),
+            color = NA, 
+            fill = "gray",
+            alpha = 0.2) + 
+    theme_void()
+}
 ```
 
-```{r check the 5 school districts}
-# Plot overlap to examine any potential issues for 5 municipalities/SDs:
-# "Auburn", "Bangor", "Lewiston", "Portland", "Sanford"
-# https://www2.census.gov/geo/maps/DC2020/PL20/st23_me/schooldistrict_maps/
-ggplot() +
-  geom_sf(data = schoolShp %>% filter(school == "Auburn"), 
-          color = "blue",   
-          fill = "blue") +
-  geom_sf(data = schoolShp %>% filter(school == "Bangor"), 
-          color = "green",   
-          fill = "green") +
-  geom_sf(data = schoolShp %>% filter(school == "Lewiston"), 
-          color = "yellow",   
-          fill = "yellow") +
-  geom_sf(data = schoolShp %>% filter(school == "Portland"), 
-          color = "red",   
-          fill = "red") +
-  geom_sf(data = schoolShp %>% filter(school == "Sanford"), 
-          color = "purple",   
-          fill = "purple") +
-  geom_sf(data = schoolShp,
-          color = "black",   
-          fill = NA,
-          linewidth = 0.2) +
-  theme_void()
-
-# Check with related county for each SDs
-if (FALSE) {
+```{r check the 5 school districts for Maine}
+if (my_state_abbr == "ME") {
+  # Plot overlap to examine any potential issues for 5 municipalities/SDs:
+  # "Auburn", "Bangor", "Lewiston", "Portland", "Sanford"
+  # https://www2.census.gov/geo/maps/DC2020/PL20/st23_me/schooldistrict_maps/
   ggplot() +
-    geom_sf(data = tractShp %>% filter(COUNTYFIP %in% c("001")),
+    geom_sf(data = schoolShp %>% filter(school == "Auburn"), 
+            color = "blue",   
+            fill = "blue") +
+    geom_sf(data = schoolShp %>% filter(school == "Bangor"), 
+            color = "green",   
+            fill = "green") +
+    geom_sf(data = schoolShp %>% filter(school == "Lewiston"), 
+            color = "yellow",   
+            fill = "yellow") +
+    geom_sf(data = schoolShp %>% filter(school == "Portland"), 
             color = "red",   
-            fill = NA) +
-    geom_sf(data = schoolShp %>% filter(school %in% c("Auburn")),
-            color = NA, 
-            fill = "green",
-            alpha = 0.2) + 
+            fill = "red") +
+    geom_sf(data = schoolShp %>% filter(school == "Sanford"), 
+            color = "purple",   
+            fill = "purple") +
+    geom_sf(data = schoolShp,
+            color = "black",   
+            fill = NA,
+            linewidth = 0.2) +
     theme_void()
   
-  ggplot() +
-    geom_sf(data = tractShp %>% filter(COUNTYFIP %in% c("019")),
-            color = "red",   
-            fill = NA) +
-    geom_sf(data = schoolShp %>% filter(school %in% c("Bangor")),
-            color = NA, 
-            fill = "green",
-            alpha = 0.2) + 
-    theme_void()
-  
-  ggplot() +
-    geom_sf(data = tractShp %>% filter(COUNTYFIP %in% c("001")),
-            color = "red",   
-            fill = NA) +
-    geom_sf(data = schoolShp %>% filter(school %in% c("Lewiston")),
-            color = NA, 
-            fill = "green",
-            alpha = 0.2) + 
-    theme_void()
-  
-  ggplot() +
-    geom_sf(data = tractShp %>% filter(COUNTYFIP %in% c("005")),
-            color = "red",   
-            fill = NA) +
-    geom_sf(data = schoolShp %>% filter(school %in% c("Portland")),
-            color = NA, 
-            fill = "green",
-            alpha = 0.2) + 
-    theme_void()
-  
-  ggplot() +
-    geom_sf(data = tractShp %>% filter(COUNTYFIP %in% c("031")),
-            color = "red",   
-            fill = NA) +
-    geom_sf(data = schoolShp %>% filter(school %in% c("Sanford")),
-            color = NA, 
-            fill = "green",
-            alpha = 0.2) + 
-    theme_void()
+  # Check with related county for each SDs
+  if (FALSE) {
+    ggplot() +
+      geom_sf(data = tractShp %>% filter(COUNTYFIP %in% c("001")),
+              color = "red",   
+              fill = NA) +
+      geom_sf(data = schoolShp %>% filter(school %in% c("Auburn")),
+              color = NA, 
+              fill = "green",
+              alpha = 0.2) + 
+      theme_void()
+    
+    ggplot() +
+      geom_sf(data = tractShp %>% filter(COUNTYFIP %in% c("019")),
+              color = "red",   
+              fill = NA) +
+      geom_sf(data = schoolShp %>% filter(school %in% c("Bangor")),
+              color = NA, 
+              fill = "green",
+              alpha = 0.2) + 
+      theme_void()
+    
+    ggplot() +
+      geom_sf(data = tractShp %>% filter(COUNTYFIP %in% c("001")),
+              color = "red",   
+              fill = NA) +
+      geom_sf(data = schoolShp %>% filter(school %in% c("Lewiston")),
+              color = NA, 
+              fill = "green",
+              alpha = 0.2) + 
+      theme_void()
+    
+    ggplot() +
+      geom_sf(data = tractShp %>% filter(COUNTYFIP %in% c("005")),
+              color = "red",   
+              fill = NA) +
+      geom_sf(data = schoolShp %>% filter(school %in% c("Portland")),
+              color = NA, 
+              fill = "green",
+              alpha = 0.2) + 
+      theme_void()
+    
+    ggplot() +
+      geom_sf(data = tractShp %>% filter(COUNTYFIP %in% c("031")),
+              color = "red",   
+              fill = NA) +
+      geom_sf(data = schoolShp %>% filter(school %in% c("Sanford")),
+              color = NA, 
+              fill = "green",
+              alpha = 0.2) + 
+      theme_void()
+  }
 }
 ```
 
@@ -403,23 +426,130 @@ if (FALSE) {
 # schoolShp downloaded from the Census does not contain tract information
 # Crosswalk can be downloaded from the National Center for Education Statistics
 # Reference: https://nces.ed.gov/programs/edge/geographic/relationshipfiles
-grffile <- glue("{input_path}GRF22/grf22_lea_tract.xlsx")
+# Note that school districts are updated every year
+grffile <- glue("{input_path}GRF24/grf24_lea_tract.xlsx")
 if (!file.exists(grffile)) {
-  download.file(url      = glue("https://nces.ed.gov/programs/edge/data/GRF22.zip"),
-            destfile = glue("{input_path}GRF22.zip"))
-  unzip(glue("{input_path}GRF22.zip"),
+  download.file(url      = glue("https://nces.ed.gov/programs/edge/data/GRF24.zip"),
+            destfile = glue("{input_path}GRF24.zip"))
+  unzip(glue("{input_path}GRF24.zip"),
         exdir = str_replace(input_path, "\\/$", ""))
 }
+
 geo_crosswalk_sd <-
   readxl::read_xlsx(grffile) %>% 
-  rename(school = NAME_LEA22,
+  rename(school = NAME_LEA24,
          GEOID  = TRACT) %>% 
   mutate(STATEFIP = substr(GEOID, 1, 2),
          LANDAREA = as.numeric(LANDAREA)) %>% 
-  filter(STATEFIP == {my_state_fip}) %>%
+  filter(STATEFIP == {my_state_fip})
+
+geo_crosswalk_sd <- geo_crosswalk_sd %>% 
+  merge(schoolShp %>% as.data.frame() %>% select(GEOID, level) %>% unique(),
+        by.x = "LEAID",
+        by.y = "GEOID",
+        all.x = TRUE) %>% 
+  filter(level %in% c("elementary", "unified")) %>% 
+  mutate(LAND_SQMETER  = LANDAREA*2589988.110336)
+
+geo_crosswalk_sd <- geo_crosswalk_sd %>%
   group_by(GEOID) %>% 
   mutate(pct_sd = LANDAREA / sum(LANDAREA))
+
 rm(grffile)
+```
+
+```{r manually update school districts with the same name}
+#School districts with the same name
+#https://www.census.gov/programs-surveys/saipe/guidance-geographies/same-name/2023.html
+#/!\ Users should check whether their own state has this issue and manually update as needed following the example of Illinois below.
+if (my_state_abbr == "IL") {
+  schoolShp <- schoolShp %>% 
+    mutate(school = case_when(GEOID == "1729100" ~ "Oak Grove School District 68 (Peoria County)",
+                              GEOID == "1729130" ~ "Oak Grove School District 68 (Lake County)",
+                              TRUE               ~ school))
+  geo_crosswalk_sd <- geo_crosswalk_sd %>% 
+    mutate(school = case_when(LEAID == "1729100" ~ "Oak Grove School District 68 (Peoria County)",
+                              LEAID == "1729130" ~ "Oak Grove School District 68 (Lake County)",
+                              TRUE               ~ school))
+}
+```
+
+```{r check land area data}
+#compare land area from crosswalk to schoolShp
+geo_crosswalk_sd_area <- geo_crosswalk_sd %>% 
+  group_by(LEAID) %>% 
+  mutate(ALAND = sum(LAND_SQMETER))
+
+schoolShp_area <- schoolShp %>% 
+  select(GEOID, STATEFP, ELSDLEA, UNSDLEA, school, level, geometry, ALAND) %>% 
+  merge(geo_crosswalk_sd_area %>% as.data.frame() %>% select(LEAID, ALAND) %>% unique(),
+        by.x = "GEOID",
+        by.y = "LEAID",
+        all.x = TRUE) %>% 
+  mutate(pct_diff = (ALAND.x - ALAND.y)/ALAND.x)
+
+summary(schoolShp_area$pct_diff)
+
+if (FALSE) {
+  schoolShp_area %>% filter(is.na(pct_diff)) %>% View()
+}
+
+#check sum of land area to Census tract
+geo_crosswalk_sum_area <- geo_crosswalk_sd %>% 
+  group_by(GEOID) %>% 
+  mutate(sum_sd = sum(LAND_SQMETER)) %>% 
+  merge(tractShp %>% as.data.frame() %>% select(GEOID, ALAND) %>% unique(),
+        by = "GEOID",
+        all.x = TRUE) %>%
+  mutate(pct_diff = abs((ALAND - sum_sd)/sum_sd)) 
+
+summary(geo_crosswalk_sum_area$pct_diff)
+
+if (FALSE) {
+  geo_crosswalk_sum_area %>% arrange(desc(pct_diff)) %>% View()
+}
+
+if (my_state_abbr == "IL") {
+  #Check 8804.27 in Plainfield
+  tractShp %>% filter(GEOID == 17197880427) %>% View()
+  schoolShp %>% filter(school %like% "Plainfield") %>% View()
+  #See the following websites for the maps:
+  #https://censusreporter.org/profiles/97000US1731740-plainfield-school-district-202-il/
+  #https://censusreporter.org/profiles/14000US17197880427-census-tract-880427-will-il/
+}
+
+rm(geo_crosswalk_sd_area, schoolShp_area, geo_crosswalk_sum_area)
+```
+
+```{r test}
+if (FALSE) {
+  #school districts and tracts
+  ggplot() +
+    geom_sf(data = tractShp %>% filter(GEOID == "17001010100"),
+            color = "red",   
+            fill = NA) +
+    geom_sf(data = schoolShp %>% filter(school == "Central CUSD 3"),
+            color = NA, 
+            fill = "green",
+            alpha = 0.2) + 
+    geom_sf(data = schoolShp %>% filter(school == "Community Unit School District 4"),
+            color = NA, 
+            fill = "yellow",
+            alpha = 0.2) + 
+    geom_sf(data = schoolShp %>% filter(school == "Southeastern Community Unit School District 337"),
+            color = NA, 
+            fill = "blue",
+            alpha = 0.2) + 
+    geom_sf(data = schoolShp %>% filter(school == "Warsaw Community Unit School District 316"),
+            color = NA, 
+            fill = "purple",
+            alpha = 0.2) + 
+    theme_void()
+}
+```
+
+```{r create SD-tract crosswalk from the Census shapefile}
+
 ```
 
 ```{r add county name to geo_crosswalk help label estimates}
@@ -533,7 +663,8 @@ if (exists("my_aux_geo")) {
              County = case_when(max(in_aux_flag) == 0 ~ County,
                                 in_aux_flag      == 0 ~ paste(County, glue("(Non-{my_aux_overall_name})")),
                                 in_aux_flag      == 1 ~ paste(County, glue("({my_aux_overall_name})"))),
-             pct_area = ifelse(is.na(pct_area), 1, pct_area))
+             pct_area = ifelse(is.na(pct_area), 1, pct_area)) %>% 
+      mutate(County = ifelse(County %like% "DuPage", "DuPage", County))
     
     if (FALSE) {
       cbind(
@@ -541,7 +672,91 @@ if (exists("my_aux_geo")) {
         geo_crosswalk_aux %>%                               select(GEOID, pct_area) %>% arrange(GEOID))
     }
   }
+} else {
+  geo_crosswalk <- geo_crosswalk %>% 
+    mutate(pct_area = 1)
 }
+```
+
+```{r add Birth to Five Council for Illinois}
+if (my_state_abbr == "IL") {
+  b5_sd_file <- glue("{input_path}BirthToFive_SD_lookup2023_2024.xlsx")
+  b5_sd <-
+    readxl::read_xlsx(b5_sd_file,
+                      sheet = "Sheet1") %>% 
+    rename(school = SchoolDistrict_NAME_Census,
+           b5     = BirthToFive_regionlabel)
+  
+  geo_crosswalk_sd <- geo_crosswalk_sd %>% 
+    mutate(school = case_when(school == "Chester-East Lincoln Community CSD 61" ~ "Chester-East Lincoln Community Csd 61",
+                              TRUE                                              ~ school))
+  
+  geo_crosswalk_b5 <- geo_crosswalk_sd %>% 
+    merge(b5_sd %>% as.data.frame() %>% select(school, b5) %>% unique(),
+          by = "school",
+          all.x = TRUE) %>% 
+    group_by(GEOID) %>% 
+    mutate(pct_b5 = LANDAREA / sum(LANDAREA)) %>% 
+    select(GEOID, b5, pct_b5, school, LEAID, level, LANDAREA, WATERAREA) %>% 
+    arrange(GEOID)
+}
+
+#Use County-based
+if (FALSE) {
+  geo_crosswalk_b5_cbased <- geo_crosswalk %>% 
+    select(GEOID, County) %>% 
+    mutate(b5 = case_when(County %in% c("Adams", "Brown", "Cass", "Morgan", "Pike", "Scott")                                       ~ "Region 1",
+                          County %in% c("Cook (Chicago)")                                                                          ~ "Region 1-A, Chicago",
+                          #County %in% c("") ~ "Region 1-B-B, West Cook",
+                          #County %in% c("") ~ "Region 1-B-C, South Cook",
+                          #County %in% c("") ~ "Region 1-B-D, North Cook",
+                          County %in% c("Bond", "Christian", "Effingham", "Fayette", "Montgomery")                                 ~ "Region 3",
+                          County %in% c("Boone", "Winnebago")                                                                      ~ "Region 4",
+                          County %in% c("Carroll", "Jo Daviess", "Stephenson")                                                     ~ "Region 8",
+                          County %in% c("Champaign", "Ford")                                                                       ~ "Region 9",
+                          County %in% c("Clark", "Coles", "Cumberland", "Douglas", "Edgar", "Moultrie", "Shelby")                  ~ "Region 11",
+                          County %in% c("Clay", "Crawford", "Jasper", "Lawrence", "Richland")                                      ~ "Region 12",
+                          County %in% c("Clinton", "Jefferson", "Marion", "Washington")                                            ~ "Region 13",
+                          County %in% c("DeKalb")                                                                                  ~ "Region 16",
+                          County %in% c("DeWitt", "Livingston", "Logan", "McLean")                                                 ~ "Region 17",
+                          County %in% c("DuPage")                                                                                  ~ "Region 19",
+                          County %in% c("Edwards", "Gallatin", "Hamilton", "Hardin", "Pope", "Saline", "Wabash", "Wayne", "White") ~ "Region 20",
+                          County %in% c("Franklin", "Johnson", "Massac", "Williamson")                                             ~ "Region 21",
+                          County %in% c("Grundy", "Kendall")                                                                       ~ "Region 24",
+                          County %in% c("Fulton", "Hancock", "McDonough", "Schuyler")                                              ~ "Region 26",
+                          County %in% c("Bureau", "Henry", "Stark")                                                                ~ "Region 28",
+                          County %in% c("Alexander", "Jackson", "Perry", "Pulaski", "Union")                                       ~ "Region 30",
+                          County %in% c("Kane")                                                                                    ~ "Region 31",
+                          County %in% c("Iroquois", "Kankakee")                                                                    ~ "Region 32",
+                          County %in% c("Henderson", "Knox", "Mercer", "Warren")                                                   ~ "Region 33",
+                          County %in% c("Lake")                                                                                    ~ "Region 34",
+                          County %in% c("LaSalle", "Marshall", "Putnam")                                                           ~ "Region 35",
+                          County %in% c("Macon", "Piatt")                                                                          ~ "Region 39",
+                          County %in% c("Calhoun", "Greene", "Jersey", "Macoupin")                                                 ~ "Region 40",
+                          County %in% c("Madison")                                                                                 ~ "Region 41",
+                          County %in% c("McHenry")                                                                                 ~ "Region 44",
+                          County %in% c("Monroe", "Randolph")                                                                      ~ "Region 45",
+                          County %in% c("Lee", "Ogle", "Whiteside")                                                                ~ "Region 47",
+                          County %in% c("Peoria")                                                                                  ~ "Region 48",
+                          County %in% c("Rock Island")                                                                             ~ "Region 49",
+                          County %in% c("St. Clair")                                                                               ~ "Region 50",
+                          County %in% c("Menard", "Sangamon")                                                                      ~ "Region 51",
+                          County %in% c("Mason", "Tazewell", "Woodford")                                                           ~ "Region 53",
+                          County %in% c("Vermilion")                                                                               ~ "Region 54",
+                          County %in% c("Will")                                                                                    ~ "Region 56"),
+           pct_b5 = 1) %>% 
+    select(GEOID, b5, pct_b5, County)
+}
+```
+
+```{r checks the total area land}
+sum(tractShp$ALAND)
+sum(schoolShp$ALAND)
+sum(countyShp$ALAND)
+
+sum(geo_crosswalk_zcta$AREALAND_PART)
+sum(geo_crosswalk_sd$LAND_SQMETER)
+geo_crosswalk_b5 %>% mutate(LANDAREA_SQM = LANDAREA*2589988.110336) %>% pull(LANDAREA_SQM) %>% sum()
 ```
 
 ```{r examine plots of the geographies}
@@ -584,9 +799,9 @@ if (exists("my_aux_geo")) {
 
 ```{r collect and save GIS data}
 geo_objects <- c("my_state_fip", "geo_crosswalk", "geo_crosswalk_zcta", "geo_crosswalk_sd", "tractShp", "pumaShp", "countyShp", "zctaShp", "schoolShp", "leaflet_base_map")
-if (exists("auxShp")) geo_objects <- c(geo_objects, "auxShp", "geo_crosswalk_aux")
+if (exists("auxShp"))        geo_objects <- c(geo_objects, "auxShp", "geo_crosswalk_aux")
 if (exists("my_county_fip")) geo_objects <- c(geo_objects, "my_county_fip")
-
+if (my_state_abbr == "IL")   geo_objects <- c(geo_objects, "geo_crosswalk_b5")
 ```
 
 

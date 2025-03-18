@@ -54,10 +54,10 @@ for (i in 1:length(elpep_spec_names)) {
 
 ### Set years for pulling data ------------------------------------------------#
 
-if (!exists("base_year")) base_year <- 2022
-base_year <- min(base_year, 2022)
+if (!exists("base_year")) base_year <- 2023
+base_year <- min(base_year, 2023)
 
-acs5_year <- min(base_year + 2, 2022)
+acs5_year <- min(base_year + 2, 2023)
 
 
 ### Fix potential issues with file paths --------------------------------------#

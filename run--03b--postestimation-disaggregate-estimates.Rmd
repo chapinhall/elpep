@@ -8,7 +8,7 @@ if (!"bin_age"       %in% objects()) source("method--general-helper-functions.R"
 
 ```{r load the data from the previous stage}
 # Load prepped data
-for (f in c("geo", "acs1", "cps", "acs5", "pop")) {
+for (f in c("geo", "acs1", "pop")) {
   load(file = glue("{output_path}{f}_data_{my_output_tag}.Rda"))
 }
 load(file = glue("{output_path}Now-cast counts at the tract level, pre-disaggregation - {my_output_tag}.Rda"))
@@ -350,7 +350,7 @@ add_agg_level <- function(ests, agg_level) {
         geo_crosswalk %>% 
         transmute(GEOID    = GEOID, 
                   County   = County, 
-                  geo_part = 1) %>% 
+                  geo_part = pct_area) %>% 
         unique()
     } else if (agg_level == "aux_geo_label") {
       geo_merge_data <- 
@@ -358,7 +358,13 @@ add_agg_level <- function(ests, agg_level) {
         transmute(GEOID         = GEOID, 
                   aux_geo_label = aux_geo_label, 
                   geo_part      = pct_area)
-    }  
+    } else if (my_state_abbr == "IL") {
+      geo_merge_data <- 
+        geo_crosswalk_b5 %>% 
+        transmute(GEOID         = GEOID, 
+                  b5            = b5, 
+                  geo_part      = pct_b5)
+    } 
     
     ests <- 
       ests %>% 
@@ -411,6 +417,11 @@ nowcast_agg_sd    <- agg_tracts_up(nowcast_elig_counts_final, "school")
 if (exists("my_aux_geo")) {
   nowcast_agg_aux <- agg_tracts_up(nowcast_elig_counts_final, "aux_geo_label")  
 }
+
+if (my_state_abbr == "IL") {
+  nowcast_agg_b5 <- agg_tracts_up(nowcast_elig_counts_final, "b5")
+}
+
 ```
 
 ```{r produce simple output of the aggregates}
@@ -431,6 +442,10 @@ if (exists("my_aux_geo")) {
   my_write.csv(nowcast_agg_aux, glue("by {my_aux_geo_desc}"))
 }
 
+if (my_state_abbr == "IL") {
+  my_write.csv(nowcast_agg_b5, "by b5 regions")
+}
+
 ```
 
 ```{r save final aggregates}
@@ -441,6 +456,9 @@ to_save <-
     "nowcast_agg_sd")
 if (exists("my_aux_geo")) {
   to_save <- c(to_save, "nowcast_agg_aux")
+}
+if (my_state_abbr == "IL") {
+  to_save <- c(to_save, "nowcast_agg_b5")
 }
 
 save(list = to_save,

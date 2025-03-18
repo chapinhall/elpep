@@ -16,7 +16,7 @@ if (!"calc_cps_transitions" %in% objects()) source_rmd("method--nowcasting-funct
 
 ```{r load data for now-casting run}
 # Load prepped data
-for (f in c("geo", "acs1", "cps", "acs5", "pop")) {
+for (f in c("geo", "cps", "acs5", "pop")) {
   load(file = glue("{output_path}{f}_data_{my_output_tag}.Rda"))
 }
 

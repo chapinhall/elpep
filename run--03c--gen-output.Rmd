@@ -223,10 +223,17 @@ if (exists("my_aux_geo")) {
          sheet_name = my_aux_geo_desc)
 }
 
+if (my_state_abbr == "IL") {
+  lAgg_for_output[[length(lAgg_for_output)+1]] <- 
+    list(agg_table = nowcast_agg_b5,
+         agg_field = "b5",
+         sheet_name = "Birth To Five")
+}
+
 write_agg_output(outcomes_regex = outcomes_out_regex,
                  #age_regex      = "age(_3$|_4$|_infant$|_toddler$)", # "_0to2|_3to5|_0to5|_6to12"
                  agg_levels     = lAgg_for_output,
-                 recency        = "most_recent",
+                 recency        = "most_recent",                      # "allbase" for calendar year of base_year + 1
                  out_label      = local_ccdf_name_short)
 
 ```
