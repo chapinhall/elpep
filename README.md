@@ -4,9 +4,15 @@ This is a project intended to estimate counts of children eligible for a range o
 
 E-mail [Nick Mader](mailto:nsmader@gmail.com) and [Hyein Kang](mailto:kanghyein@hotmail.com) for questions related to this method or this codebase.
 
+## Suggested Citation
+
+Mader, N., Kang, H.. (2025). Method for Estimates of Local Populations Eligible for Programs (ELPEP) for near-present conditions in small geographies. GitHub. https://github.com/chapinhall/elpep
+
 # Methodology
 
-See the `run--00--main-doc.Rmd` script for the most recent description of the statistical methodology. That script can be "rendered" in RStudio to produce not just a fully typeset description of methods, but to run all data pulls, development, analysis methods, related methods showing results and diagnostics, and to output table and map files.
+Click [this link](https://github.com/chapinhall/elpep/raw/refs/heads/main/ELPEP%20Methodology%20Summary.docx) to download a summary of ELPEP's methodology.
+
+A full technical report, including fully typeset description of methods, but to run all data pulls, development, analysis methods, related methods showing results and diagnostics for a given run will be "rendered" when running the "run-elpep.Rmd" script after specifying run details using the `Interface for Specifying Custom ELPEP Eligibility Estimates.xlsm` interface. This process will simultaneous output files with table and map output.
 
 # Running This Code
 
@@ -68,12 +74,12 @@ To update with new CPS basic monthly file:
 5. Add newly released sample
 6. Click "Submit Sample Selections"
 7. Download the data and DDI in the input folder.
-8. Update the data file name (cps_000XX) in the `settings--config.R`
+8. Update the data file name (cps_000XX) in the Excel Interface file
 9. Run the code
 
 To update with new ACS 1-year or 5-year:
 
-1. Assign new year to `base_year` or `acs5_year` in the `settings--config.R`
+1. Update the "base year" field in the Excel Interface file
 2. Run the code
 
 # Data Sources and their Uses
