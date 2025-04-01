@@ -77,14 +77,14 @@ We compare the impact on transition rates of adjusting program eligibility (and 
 
 ```{r calculate CPS transitions by only poverty -- unadjusted}
 cps_transition_pov_unadj <- 
-  calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & METRO %in% 2:4],
+  calc_cps_transitions(base_data = cps_child_base[YEAR == base_year & METRO %in% 2:4],
                        #stratum_vars = "child_agegroup",
                        vulnerability_vars = c("fam_incpov_ratio_cat_by100"), 
                        outcome_vars = c("incpov_le100_post",
                                         "incpov_le200_post"))
 
 cps_transition_pov_adj <- 
-  calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & METRO %in% 2:4],
+  calc_cps_transitions(base_data = cps_child_base[YEAR == base_year & METRO %in% 2:4],
                        #stratum_vars = "child_agegroup",
                        vulnerability_vars = c("fam_incpov_ratio_cat_by100_adj"), 
                        outcome_vars = c("incpov_le100_post_adj",
@@ -110,7 +110,7 @@ We examine transitions by poverty and head of household industry for income-to-p
 
 ```{r calculate CPS transitions by adjusted poverty and head of household industry}
 cps_transition_pov_indv <- 
-  calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & METRO %in% 2:4],
+  calc_cps_transitions(base_data = cps_child_base[YEAR == base_year & METRO %in% 2:4],
                        #stratum_vars = "child_agegroup",
                        vulnerability_vars = c("fam_incpov_ratio_cat_by100_adj",
                                               "hoh_industry_vulnerable"), 
@@ -129,7 +129,7 @@ visualize_cps_transitions(trans_calcs = cps_transition_pov_indv,
 
 ```{r calculate CPS transitions by poverty and presence of school-aged child}
 cps_transition_pov_schkid <- 
-  calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & METRO %in% 2:4],
+  calc_cps_transitions(base_data = cps_child_base[YEAR == base_year & METRO %in% 2:4],
                        #stratum_vars = "child_agegroup",
                        vulnerability_vars = c("fam_incpov_ratio_cat_by100_adj",
                                               "has_schage_kid_base"), 
@@ -154,15 +154,15 @@ cps_child_base[j = fhoh_empl := factor(hoh_empl,
                                        levels = 0:1,
                                        labels = c("HOH Not Emp, Base",
                                                   "HOH Emp, Base"))]
-transition_ratios_empl_2019 <-
-  calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & MONTH == 1], 
+transition_ratios_empl_base <-
+  calc_cps_transitions(base_data = cps_child_base[YEAR == base_year & MONTH == 1], 
                        stratum_vars = NULL, 
                        vulnerability_vars = c("fam_incpov_ratio_cat_by100_adj", 
                                               "fhoh_empl"),
                        outcome_vars = c("hoh_empl_post"),
                        use_boot = TRUE)
 
-visualize_cps_transitions(trans_calcs = transition_ratios_empl_2019, 
+visualize_cps_transitions(trans_calcs = transition_ratios_empl_base, 
                           vul_vars = c("fam_incpov_ratio_cat_by100_adj",
                                        "fhoh_empl"),
                           vul1_label = "Income-to-Poverty at Baseline",
@@ -185,8 +185,8 @@ show_ipums_doc(cps_documentation,
 We compare transition ratios across inclusion of surveyed households by metropolitan residence status.
 
 ```{r calculate CPS transitions by metro residence status}
-transition_ratios_empl_2019_metro <-
-  calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & MONTH == 1 & METRO %in% 1:4] %>% 
+transition_ratios_empl_base_metro <-
+  calc_cps_transitions(base_data = cps_child_base[YEAR == base_year & MONTH == 1 & METRO %in% 1:4] %>% 
                          .[j = METRO := factor(METRO, 
                                                levels = 1:4,
                                                labels = c("Not in Metro", "Central City", 
@@ -197,7 +197,7 @@ transition_ratios_empl_2019_metro <-
                        outcome_vars = c("hoh_empl_post"),
                        use_boot = TRUE)
 
-visualize_cps_transitions(trans_calcs = transition_ratios_empl_2019_metro, 
+visualize_cps_transitions(trans_calcs = transition_ratios_empl_base_metro, 
                           vul_vars = c("fam_incpov_ratio_cat_by100_adj",
                                        "METRO"),
                           vul1_label = "Income-to-Poverty at Baseline",
@@ -217,9 +217,9 @@ trans_ratio_calc_byinput <- function(subset_data, subset_label) {
     mutate(subset_label = subset_label)
 }
 
-trans_ratios_2019       <- trans_ratio_calc_byinput(cps_child_base[YEAR == 2019],                  "All CPS")
-trans_ratios_metro      <- trans_ratio_calc_byinput(cps_child_base[YEAR == 2019 & METRO %in% 2:4], "Metro")
-trans_ratios_citycenter <- trans_ratio_calc_byinput(cps_child_base[YEAR == 2019 & METRO == 2],     "City Center")
+trans_ratios_base       <- trans_ratio_calc_byinput(cps_child_base[YEAR == base_year],                  "All CPS")
+trans_ratios_metro      <- trans_ratio_calc_byinput(cps_child_base[YEAR == base_year & METRO %in% 2:4], "Metro")
+trans_ratios_citycenter <- trans_ratio_calc_byinput(cps_child_base[YEAR == base_year & METRO == 2],     "City Center")
 ```
 
 
@@ -229,7 +229,7 @@ We examine transitions into CCDF eligibility.
 
 ```{r calculate CPS transitions into CCDF by income and spouse presence}
 cps_transition_ccdf <- 
-  calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & METRO %in% 2:4],
+  calc_cps_transitions(base_data = cps_child_base[YEAR == base_year & METRO %in% 2:4],
                        #stratum_vars = "child_agegroup",
                        vulnerability_vars = c("fam_incpov_ratio_cat_by100_adj",
                                               "fSpouse_present"), 
@@ -249,7 +249,7 @@ visualize_cps_transitions(trans_calcs = cps_transition_ccdf,
 
 ```{r calculate CPS transitions into CCDF by income and workforce eligibility}
 cps_transition_ccdf <- 
-  calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & METRO %in% 2:4] %>% 
+  calc_cps_transitions(base_data = cps_child_base[YEAR == base_year & METRO %in% 2:4] %>% 
                                      .[j = fCcdf_elig := c("Not Working Elig (base)", 
                                                                  "Working Elig (base)")[1 + ccdf_elig_tight]],
                        #stratum_vars = "child_agegroup",
@@ -276,7 +276,7 @@ comp_vars <- c("ratio_mean", "ratio_se")
 keep_vars <- c("fam_incpov_ratio_cat_by100", "outcome_var", comp_vars)
   
 comp_ratios_loc <- 
-  bind_rows(trans_ratios_2019,
+  bind_rows(trans_ratios_base,
             trans_ratios_metro,
             trans_ratios_citycenter) %>% 
   mutate(outcome_label = label_outcome(outcome_var),
@@ -305,10 +305,10 @@ ggplot(comp_ratios_loc,
 We examine sensitivities of "transition ratios" across choices of CPS entering cohorts to include.
 
 ```{r calculate transition ratio calculations by cohort}
-trans_ratios_2019_01  <- trans_ratio_calc_byinput(cps_child_base[METRO %in% 2:4 & YEAR == 2019 & MONTH == 1], "Jan 2019 Cohort")
-trans_ratios_2019     <- trans_ratio_calc_byinput(cps_child_base[METRO %in% 2:4 & YEAR == 2019],              "All 2019 Cohorts")
-trans_ratios_2020_02  <- trans_ratio_calc_byinput(cps_child_base[METRO %in% 2:4 & YEAR == 2020 & MONTH == 2], "Feb 2020 Cohort")
-trans_ratios_2020_win <- trans_ratio_calc_byinput(cps_child_base[METRO %in% 2:4 & YEAR_MONTH %in% c("2019-12", paste0("2020-0", 1:2))],              "Winter 19/20 Cohort")
+trans_ratios_base_01  <- trans_ratio_calc_byinput(cps_child_base[METRO %in% 2:4 & YEAR == base_year & MONTH == 1], "Jan Cohort")
+trans_ratios_base     <- trans_ratio_calc_byinput(cps_child_base[METRO %in% 2:4 & YEAR == base_year],              "All Cohorts")
+# trans_ratios_2020_02  <- trans_ratio_calc_byinput(cps_child_base[METRO %in% 2:4 & YEAR == 2020 & MONTH == 2], "Feb 2020 Cohort")
+# trans_ratios_2020_win <- trans_ratio_calc_byinput(cps_child_base[METRO %in% 2:4 & YEAR_MONTH %in% c("2019-12", paste0("2020-0", 1:2))],              "Winter 19/20 Cohort")
 ```
 
 ```{r compare sensitivities across cps cohorts}
@@ -316,13 +316,14 @@ comp_vars <- c("ratio_mean", "ratio_se")
 keep_vars <- c("fam_incpov_ratio_cat_by100", "outcome_var", comp_vars)
   
 comp_ratios_cohort <- 
-  bind_rows(trans_ratios_2019,
-            trans_ratios_2019_01,
-            trans_ratios_2020_02,
-            trans_ratios_2020_win) %>% 
+  bind_rows(trans_ratios_base,
+            trans_ratios_base_01
+            # trans_ratios_2020_02,
+            # trans_ratios_2020_win
+            ) %>% 
   mutate(outcome_label = label_outcome(outcome_var),
          cohorts = factor(subset_label, 
-                          levels = c("All 2019 Cohorts", "Jan 2019 Cohort", "Feb 2020 Cohort", "Winter 19/20 Cohort")))
+                          levels = c("All Cohorts", "Jan Cohort"))) # , "Feb 2020 Cohort", "Winter 19/20 Cohort"
 
 ggplot(comp_ratios_cohort,
        aes(x = outcome_label, 
@@ -343,7 +344,7 @@ ggplot(comp_ratios_cohort,
 
 This method considers community factors of households for predicting potential transition into eligibility status. In addition to accounting for "vulnerability" factors such as baseline poverty status, this method can also consider factors like education, race/ethnicity, or general industries employing local workers.
 
-While the SAE method is limited in how much detail it can estimate for 2019 with validity, this method uses other measures by assuming that ACS 5-year measures are applicable to 2019. For some measures like adult educational attainment and race/ethnicity, we believe that this assumption is defensible.
+While the SAE method is limited in how much detail it can estimate for `r `base_year` with validity, this method uses other measures by assuming that ACS 5-year measures are applicable to `r base_year` For some measures like adult educational attainment and race/ethnicity, we believe that this assumption is defensible.
 
 ```{r prepare cps data for statistical analysis of transitions}
 # Note--fields that need to be constructed in parallel to the SAE specifications
@@ -785,7 +786,8 @@ compare_betas <- function(betas, title, subtitle, comp_var, comp_var_label, prin
     coord_flip() + 
     theme_minimal() +
     theme(axis.text = element_text(size = 11),
-          legend.position = "bottom")
+          legend.position = "bottom",
+          plot.title.position = "plot")
   
   if (save_tag != "") {
     ggsave(plot = my_plot, 

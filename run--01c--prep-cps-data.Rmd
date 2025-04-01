@@ -1108,7 +1108,7 @@ examine_empl_post("spouse_present_b", "Presence of Spouse at Base")
 <!-- * The greatest differentials are in finance, construction, manufacturing, other services -->
 
 ```{r which industries did people leave, eval = developer_mode}
-cps_hoh_pre_post[YEAR_b == 2019 & hoh_empl_b == TRUE,
+cps_hoh_pre_post[YEAR_b == base_year & hoh_empl_b == TRUE,
                  j = .(pct_leaving = mean(1 - hoh_empl_p)),
                  by = .(fam_incpov_ratio_cat_by100_b, hoh_industry_b)] %>% 
   ggplot(aes(x = fam_incpov_ratio_cat_by100_b,
@@ -1135,7 +1135,7 @@ cps_hoh_pre_post[YEAR_b == 2019 & hoh_empl_b == TRUE,
 <!-- There's a curious pattern here where, above, lower-income HOHs have the highest rate of unemployment coming from, say, food services, and also have the most over-representation here among those who stayed employed. This could be explained by HOHs switching into these industries. -->
 
 ```{r which industries did people enter, eval = developer_mode}
-cps_hoh_pre_post[YEAR_b == 2019 & hoh_empl_p == TRUE,
+cps_hoh_pre_post[YEAR_b == base_year & hoh_empl_p == TRUE,
                  j = .(n = .N),
                  by = .(fam_incpov_ratio_cat_by100_b, hoh_empl_b, hoh_industry_p)] %>% 
   .[j = pct_in_indust_post := n / sum(n),
