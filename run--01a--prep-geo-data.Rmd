@@ -429,7 +429,8 @@ if (my_state_abbr == "ME") {
 # Note that school districts are updated every year
 grffile <- glue("{input_path}GRF24/grf24_lea_tract.xlsx")
 if (!file.exists(grffile)) {
-  download.file(url      = glue("https://nces.ed.gov/programs/edge/data/GRF24.zip"),
+  options(timeout = max(300, getOption("timeout")))
+  download.file(url  = glue("https://nces.ed.gov/programs/edge/data/GRF24.zip"),
             destfile = glue("{input_path}GRF24.zip"))
   unzip(glue("{input_path}GRF24.zip"),
         exdir = str_replace(input_path, "\\/$", ""))
