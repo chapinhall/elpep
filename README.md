@@ -39,8 +39,8 @@ A full technical report, including fully typeset description of methods, but to 
 6. Click "View cart"
 7. Click "Create Data Extract"
 8. When the data extract is complete, download the data and the DDI file to the input folder. The file extension of the data file should appear as `csv.gz` in the input folder. For the DDI file, right-click on the "DDI" link to save the file in the input folder.
-9. Download 2010 Block Groups to 2020 Census tracts crosswalk from NHGIS (IPUMS log in required). Click this [url](https://data2.nhgis.org/crosswalks/nhgis_bg2010_tr2020.zip) and a pop-up window for download will appear. Save the file in the input folder
-10. Download 2010 Block to 2020 Block (GEOID Identifiers) crosswalk from NHGIS (IPUMS log in required). Click this [url](https://data2.nhgis.org/crosswalks/nhgis_blk2010_blk2020_ge.zip) and a pop-up window for download will appear. Save the file in the input folder
+9. Download 2010 Block Groups to 2020 Census tracts crosswalk from NHGIS (IPUMS log in required). This [url](https://secure-assets.ipums.org/nhgis/crosswalks/nhgis_bg2010_tr2020.zip) has a link to the necessary file. Once it is downloaded, save it to the input folder.
+10. Download 2010 Block to 2020 Block (GEOID Identifiers) crosswalk from NHGIS (IPUMS log in required). This [url](https://secure-assets.ipums.org/nhgis/crosswalks/nhgis_bg2010_bg2020.zip) has a link to the necessary file. Once it is downloaded, save the file in the input folder.
 
 You will now have the following four files in the input folder: CPS data, CPS documentation, and two crosswalk files.
 
@@ -160,4 +160,3 @@ The diagnostic scripts generally represent one-time examinations that were run t
 Throughout the codebase, there are two marker that signal attention to users:
 * /!\\ -- this is used in comments that are primarily advisory, explaining a key assumption, decision, or opportunity for future reconsideration
 * /*\\ -- this is used to invite users to alter or add to the code. Examples include diagnostics where some local information can be provided, or titling or explanation of figures to describe the patterns seen in the user's own data. Efforts have been made to ensure that the code is structured to allow for multiple users to contribute to a common codebase (e.g. by using conditional statements that select the appropriate figure title based on the `my_output_tag` value relevant to the local context), but for cases where larger deviation is required (e.g. where the codebase is modified to focus on a different public program requiring different data development) we recommend "forking" this repository for parallel development.
-
