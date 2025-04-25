@@ -39,14 +39,14 @@ if ("my_county" %in% objects()) {
 
 ```{r prepare geographic crosswalk data}
 if (base_year <= 2021) {
-  xwalk_source <- "https://www2.census.gov/geo/docs/maps-data/data/rel/2010_Census_Tract_to_2010_PUMA.txt"
+  xwalk_source <- "http://www2.census.gov/geo/docs/maps-data/data/rel/2010_Census_Tract_to_2010_PUMA.txt"
   # We use 2010 crosswalks even up through 2021 because that is the geographic units 
   # utilized by 2021 ACS1 microdata (i.e. 2010 vintage PUMAs). 
   # See this reference for various connections between data release and 
   # vintage of related geographic boundaries:
   #   https://www.census.gov/programs-surveys/acs/geography-acs/geography-boundaries-by-year.2021.html#list-tab-626530102
 } else {
-  xwalk_source <- "https://www2.census.gov/geo/docs/maps-data/data/rel2020/2020_Census_Tract_to_2020_PUMA.txt"
+  xwalk_source <- "http://www2.census.gov/geo/docs/maps-data/data/rel2020/2020_Census_Tract_to_2020_PUMA.txt"
 }
 
 geo_crosswalk_puma <-
@@ -71,7 +71,7 @@ geo_crosswalk_puma <-
          GEOID     = paste0(STATEFIP, COUNTYFIP, TRACTFIP))
 
 geo_crosswalk_zcta <-
-  fread("https://www2.census.gov/geo/docs/maps-data/data/rel2020/zcta520/tab20_zcta520_tract20_natl.txt") %>%
+  fread("http://www2.census.gov/geo/docs/maps-data/data/rel2020/zcta520/tab20_zcta520_tract20_natl.txt") %>%
   rename(GEOID = GEOID_TRACT_20,
          ZCTA  = GEOID_ZCTA5_20) %>% 
   mutate(GEOID         = str_pad(GEOID, width = 11, side = "left", pad = "0"),  #GEOID: 11-digit (concatenation of state, county, place, and tract)
@@ -120,7 +120,7 @@ if (exists("my_county_fip")) {
 # apportionment via population percentage (which is most desirable) vs via land
 # percentage (which is the best available in 2020)
 geo_crosswalk_zcta_2010 <- 
-  fread("https://www2.census.gov/geo/docs/maps-data/data/rel/zcta_tract_rel_10.txt") %>%
+  fread("http://www2.census.gov/geo/docs/maps-data/data/rel/zcta_tract_rel_10.txt") %>%
   .[STATE == my_state_fip] %>% 
   .[j = GEOID := as.character(GEOID)] %>% 
   .[j = `:=`(pop_pct  = TRPOPPCT      / 100,
@@ -165,9 +165,9 @@ try(zctaShp   <-    zctas(cb = TRUE, year = tiger_year, starts_with = zcta_start
   # the zctas() function can only return by state for years 2000 and 2010 
 
 # Download school district file from Census using tigris package
-elShp <- school_districts(state = {my_state_fip}, type = 'elementary', year = tiger_year + 1)
-scShp <- school_districts(state = {my_state_fip}, type = 'secondary',  year = tiger_year + 1)
-unShp <- school_districts(state = {my_state_fip}, type = 'unified',    year = tiger_year + 1)
+elShp <- school_districts(state = my_state_fip, type = 'elementary', year = tiger_year + 1)
+scShp <- school_districts(state = my_state_fip, type = 'secondary',  year = tiger_year + 1)
+unShp <- school_districts(state = my_state_fip, type = 'unified',    year = tiger_year + 1)
 
 # Clean data
 schoolShp <- 
@@ -688,16 +688,22 @@ if (my_state_abbr == "IL") {
     rename(school = SchoolDistrict_NAME_Census,
            b5     = BirthToFive_regionlabel)
   
-  geo_crosswalk_sd <- geo_crosswalk_sd %>% 
-    mutate(school = case_when(school == "Chester-East Lincoln Community CSD 61" ~ "Chester-East Lincoln Community Csd 61",
-                              TRUE                                              ~ school))
-  
-  geo_crosswalk_b5 <- geo_crosswalk_sd %>% 
+  geo_crosswalk_sd <- 
+    geo_crosswalk_sd %>% 
+    mutate(school = 
+             case_when(school == "Chester-East Lincoln Community CSD 61" ~ "Chester-East Lincoln Community Csd 61",
+                       TRUE                                              ~ school))
+ 
+  stopifnot(mean(b5_sd$school %in% geo_crosswalk_sd$school) == 1)
+  stopifnot(mean(geo_crosswalk_sd$school %in% b5_sd$school) == 1)
+  geo_crosswalk_b5 <- 
+    geo_crosswalk_sd %>% 
     merge(b5_sd %>% as.data.frame() %>% select(school, b5) %>% unique(),
           by = "school",
           all.x = TRUE) %>% 
-    group_by(GEOID) %>% 
-    mutate(pct_b5 = LANDAREA / sum(LANDAREA)) %>% 
+    mutate(
+      .by = GEOID,
+      pct_b5 = LANDAREA / sum(LANDAREA)) %>% 
     select(GEOID, b5, pct_b5, school, LEAID, level, LANDAREA, WATERAREA) %>% 
     arrange(GEOID)
 }
