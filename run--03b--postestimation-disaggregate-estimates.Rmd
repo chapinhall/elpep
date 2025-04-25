@@ -358,6 +358,13 @@ add_agg_level <- function(ests, agg_level) {
         transmute(GEOID         = GEOID, 
                   aux_geo_label = aux_geo_label, 
                   geo_part      = pct_area)
+    } else if (agg_level == "all") {
+      geo_merge_data <- 
+        geo_crosswalk %>% 
+        transmute(GEOID    = GEOID, 
+                  all      = my_state,
+                  geo_part = 1) %>% 
+        unique()
     } else if (my_state_abbr == "IL") {
       geo_merge_data <- 
         geo_crosswalk_b5 %>% 
@@ -413,6 +420,7 @@ nowcast_agg_tract <- agg_tracts_up(nowcast_elig_counts_final, "GEOID")
 nowcast_agg_zip   <- agg_tracts_up(nowcast_elig_counts_final, "ZCTA")
 nowcast_agg_cty   <- agg_tracts_up(nowcast_elig_counts_final, "County")
 nowcast_agg_sd    <- agg_tracts_up(nowcast_elig_counts_final, "school")
+nowcast_agg_all   <- agg_tracts_up(nowcast_elig_counts_final, "all")
 
 if (exists("my_aux_geo")) {
   nowcast_agg_aux <- agg_tracts_up(nowcast_elig_counts_final, "aux_geo_label")  
@@ -453,7 +461,8 @@ to_save <-
   c("nowcast_agg_tract",
     "nowcast_agg_zip",
     "nowcast_agg_cty",
-    "nowcast_agg_sd")
+    "nowcast_agg_sd",
+    "nowcast_agg_all")
 if (exists("my_aux_geo")) {
   to_save <- c(to_save, "nowcast_agg_aux")
 }
