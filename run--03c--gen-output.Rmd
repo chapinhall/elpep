@@ -69,9 +69,11 @@ write_agg_output <- function(outcomes_regex, age_regex = ".+", agg_levels, recen
   
   for (lvl in agg_levels) {
     add_sheet <-
-      copy(lvl[["agg_table"]]) %>% 
-      arrange(get(lvl[["agg_field"]])) %>% 
-      setnames(lvl[["agg_field"]], lvl[["sheet_name"]]) %>% 
+      copy(lvl[["agg_table"]]) %>%
+      setnames(lvl[["agg_field"]], "agg_field_label") %>% 
+      mutate(agg_field_label = sort_by_char_nums(agg_field_label)) %>% 
+      arrange(agg_field_label) %>% 
+      setnames("agg_field_label", lvl[["sheet_name"]]) %>% 
       filter(pd == "nowcast",
              cps_base_recency == recency,
              str_detect(outcome_var, outcomes_regex)) %>% 
@@ -200,21 +202,29 @@ output_fpl_cuts_regex <-
   str_trim() %>% 
   paste(collapse = "|")
 
-outcomes_out_regex <- glue("ccdf_elig_incratio_|incpov_le({output_fpl_cuts_regex})")
+output_ccdf_cuts_regex <- 
+  local_ccdf_incratio_cuts %>% 
+  str_split(pattern = ",") %>% 
+  unlist() %>% 
+  str_trim() %>% 
+  paste(collapse = "|")
 
+outcomes_out_regex <- glue("ccdf_elig_incratio_({output_ccdf_cuts_regex})|incpov_le({output_fpl_cuts_regex})")
+
+# Order output to be roughly geographically largest to smallest (tracts last)
 lAgg_for_output <- 
-  list(list(agg_table = nowcast_agg_tract,
-            agg_field = "GEOID",
-            sheet_name = "Census Tract"),
-       list(agg_table = nowcast_agg_zip,
-            agg_field = "ZCTA",
-            sheet_name = "Zip Code"),
+  list(list(agg_table = nowcast_agg_all,
+            agg_field = "all",
+            sheet_name = my_state),
        list(agg_table = nowcast_agg_cty,
             agg_field = "County",
             sheet_name = "County"),
        list(agg_table = nowcast_agg_sd,
             agg_field = "school",
-            sheet_name = "School Districts"))
+            sheet_name = "School Districts"),
+       list(agg_table = nowcast_agg_zip,
+            agg_field = "ZCTA",
+            sheet_name = "Zip Code"))
 
 if (exists("my_aux_geo")) {
   lAgg_for_output[[length(lAgg_for_output)+1]] <- 
@@ -229,6 +239,11 @@ if (my_state_abbr == "IL") {
          agg_field = "b5",
          sheet_name = "Birth To Five")
 }
+
+lAgg_for_output[[length(lAgg_for_output)+1]] <- 
+  list(agg_table = nowcast_agg_tract,
+       agg_field = "GEOID",
+       sheet_name = "Census Tract")
 
 write_agg_output(outcomes_regex = outcomes_out_regex,
                  #age_regex      = "age(_3$|_4$|_infant$|_toddler$)", # "_0to2|_3to5|_0to5|_6to12"
