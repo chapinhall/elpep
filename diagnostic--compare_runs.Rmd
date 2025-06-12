@@ -1,0 +1,140 @@
+
+<!-- This .Rmd file is set up to run either independently by checking for 
+the presence of necessary objects in the global environment and running 
+related scripts if not, or also as a child to the "main-doc". For that latter
+reason, comments and headings that are not relevant to a final report to
+pubic audiences are suppressed or moved to code chunks that can optionally be 
+`echo`ed as desired. -->
+
+```{r}
+# set flags for running this script
+print_documentation <- FALSE
+
+# set other parameters to control the run
+run_tag_old <- "IECAM_2025-03"
+run_tag_new <- "IECAM_2025-06"
+```
+
+```{r run scripts for necessary packages and objects as necessary}
+# 
+if (!"meanNA"        %in% objects()) source("settings--main.R", echo = FALSE)
+if (!"my_state_abbr" %in% objects()) source("method--read-customization-file.R", echo = FALSE)
+if (!"bin_age"       %in% objects()) source("method--general-helper-functions.R", echo = FALSE)
+
+```
+
+# Load raw output from each run
+
+We will work with the "simple" output because that has all specifications developed.
+
+```{r discover all pieces of the basic output}
+to_read_old <- list.files(output_path, glue("Simple elig output.+{run_tag_old}.csv"))
+to_read_new <- list.files(output_path, glue("Simple elig output.+{run_tag_new}.csv"))
+
+if (length(to_read_old) != length(to_read_new)) message(glue("There are {length(to_read_old)} old geographic aggregations of old files and {length(to_read_new)} new ones."))
+```
+
+```{r read and build comparisons}
+
+for (f in to_read_new) {
+  
+  # Extract geographic info from read-in file
+  geo <- 
+    f %>% 
+    str_replace(
+      glue("Simple.+-- by (.+)_{run_tag_new}.+"), 
+      "\\1") %>% 
+    str_replace_all(" ", "")
+  
+  est_new <- fread(glue("{output_path}{f}"))
+  
+  # read old equivalent
+  f_old <- str_replace(f, run_tag_new, run_tag_old)
+  try({est_old <- fread(glue("{output_path}{f_old}"))}, silent = TRUE)
+  
+  if (nrow(est_old) == 0) {
+    message(glue("No prior run data found for {geo}"))
+  } else {
+    # col_types <- sapply(est_new, class)
+    # char_cols <- names(col_types)[col_types == "character"]
+    merge_cols <- 
+      c(colnames(est_new)[1], # This is the first field, which is the geographic field
+        "age", "pd", "outcome_var", "cps_base_recency")
+    
+    comp <- 
+      merge(
+        x = est_new,
+        y = est_old,
+        by = merge_cols,
+        suffixes = c("_n", "_o"),
+        all = TRUE) %>% 
+      setnames(colnames(est_new)[1], "geo")
+    
+    assign(glue("comp_{geo}"), comp) 
+  }
+}
+```
+
+
+# Compare Values
+
+```{r}
+base_comp_plot <- function(x, my_alpha = 0.1) {
+  x %>% 
+    ggplot() +
+    aes(x = count_o,
+        y = count_n) + 
+    geom_abline() + 
+    geom_point(alpha = my_alpha) +
+    scale_x_continuous(labels = comma) +
+    scale_y_continuous(labels = comma) +
+    theme_minimal()
+}
+```
+
+```{r examine county-level estimates}
+comp_county %>% 
+  base_comp_plot() +
+  facet_wrap(
+    ~outcome_var,
+    scale = "free")
+```
+
+```{r examine tract-level estimates}
+comp_tract %>% 
+  filter(cps_base_recency == "most_recent") %>% 
+  base_comp_plot(
+    my_alpha = 0.05) +
+  facet_grid(
+    outcome_var ~ age,
+    scales = "free") + 
+  geom_smooth()
+```
+
+```{r build statistics on correlation and absolute pct diff }
+# Examine contrast statistics at the tract level
+comp_tract %>% 
+  filter(pd == "nowcast") %>% 
+  summarize(
+    .by = c(age, outcome_var, cps_base_recency),
+    rho = cor(count_o, count_n, use = "pairwise"),
+    avg_abs_pct_diff = meanNA(abs((count_n - count_o)/count_n))) %>% 
+  summary()
+
+# Examine contrast statistics at the county level
+comp_tract %>% 
+  filter(pd == "nowcast") %>% 
+  mutate(
+    county = str_sub(geo, 1, 5)) %>% 
+  summarize(
+    .by = c(age, outcome_var, cps_base_recency, county),
+    count_o = sum(count_o),
+    count_n = sum(count_n)) %>% 
+  summarize(
+    .by = c(age, outcome_var, cps_base_recency),
+    rho = cor(count_o, count_n, use = "pairwise"),
+    avg_abs_pct_diff = meanNA(abs((count_n - count_o)/count_n))) %>% 
+  summary()
+```
+
+
