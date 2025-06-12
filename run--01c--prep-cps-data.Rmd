@@ -353,9 +353,9 @@ cps_pov <-
   # Remove economic impact payment information to get adjusted family income
   # relevant for program eligibility
   .[j = faminc_draw := draw_inc(FAMINC)] %>% 
-  .[j = faminc_adj_unbounded := faminc_draw - eip1_receipt*eip1_est -
-                                              eip2_receipt*eip2_est -
-                                              eip3_receipt*eip3_est] %>% 
+  .[j = faminc_adj_unbounded := faminc_draw - ifelse(eip1_receipt, eip1_est, 0) -
+                                              ifelse(eip2_receipt, eip2_est, 0) -
+                                              ifelse(eip3_receipt, eip3_est, 0)] %>% 
   
   .[j = faminc_adj := pmax(0, faminc_adj_unbounded)] %>% 
   
@@ -936,21 +936,23 @@ ggplot(cps_trans,
 <!-- Takeaway -- seems like there's something upstream that is an issue. -->
 
 ```{r compare incomes with a baseline year of 2019, eval = developer_mode}
-ggplot(cps_trans[YEAR_b == 2019],
-       aes(x = faminc_adj_b,
-           y = faminc_adj_p)) +
-  geom_point() + 
-  geom_abline(color = "blue", 
-              linewidth = 1) +
-  geom_smooth(color = "red")
-
-ggplot(cps_trans[YEAR_b == 2019],
-       aes(x = fam_incpov_ratio_b,
-           y = fam_incpov_ratio_p)) +
-  geom_point() + 
-  geom_abline(color = "blue", 
-              linewidth = 1) +
-  geom_smooth(color = "red")
+if (2019 %in% cps_trans$YEAR_b) {
+  ggplot(cps_trans[YEAR_b == 2019],
+         aes(x = faminc_adj_b,
+             y = faminc_adj_p)) +
+    geom_point() + 
+    geom_abline(color = "blue", 
+                linewidth = 1) +
+    geom_smooth(color = "red")
+  
+  ggplot(cps_trans[YEAR_b == 2019],
+         aes(x = fam_incpov_ratio_b,
+             y = fam_incpov_ratio_p)) +
+    geom_point() + 
+    geom_abline(color = "blue", 
+                linewidth = 1) +
+    geom_smooth(color = "red") 
+}
 ```
 
 <!-- Select examples for investigation. These may not be representative income-wise, but may uncover systematic matching issues. -->
@@ -1108,23 +1110,25 @@ examine_empl_post("spouse_present_b", "Presence of Spouse at Base")
 <!-- * The greatest differentials are in finance, construction, manufacturing, other services -->
 
 ```{r which industries did people leave, eval = developer_mode}
-cps_hoh_pre_post[YEAR_b == 2019 & hoh_empl_b == TRUE,
-                 j = .(pct_leaving = mean(1 - hoh_empl_p)),
-                 by = .(fam_incpov_ratio_cat_by100_b, hoh_industry_b)] %>% 
-  ggplot(aes(x = fam_incpov_ratio_cat_by100_b,
-             y = pct_leaving,
-             fill = fam_incpov_ratio_cat_by100_b)) +
-  geom_bar(stat = "identity",
-           position = "dodge") +
-  facet_wrap(~ hoh_industry_b,
-             scales = "free") +
-  scale_y_continuous(labels = percent) +
-  scale_fill_discrete(name = "Income-to-Pov Ratio, at Base") +
-  labs(title = "Percent of Workers that Become Unemployed, by Baseline Income and Baseline Industry",
-       x = "",
-       y = "Pct Leaving Industry") +
-  theme_minimal() +
-  theme(legend.position = "bottom")
+if (2019 %in% cps_hoh_pre_post$YEAR_b) {
+  cps_hoh_pre_post[YEAR_b == 2019 & hoh_empl_b == TRUE,
+                   j = .(pct_leaving = mean(1 - hoh_empl_p)),
+                   by = .(fam_incpov_ratio_cat_by100_b, hoh_industry_b)] %>% 
+    ggplot(aes(x = fam_incpov_ratio_cat_by100_b,
+               y = pct_leaving,
+               fill = fam_incpov_ratio_cat_by100_b)) +
+    geom_bar(stat = "identity",
+             position = "dodge") +
+    facet_wrap(~ hoh_industry_b,
+               scales = "free") +
+    scale_y_continuous(labels = percent) +
+    scale_fill_discrete(name = "Income-to-Pov Ratio, at Base") +
+    labs(title = "Percent of Workers that Become Unemployed, by Baseline Income and Baseline Industry",
+         x = "",
+         y = "Pct Leaving Industry") +
+    theme_minimal() +
+    theme(legend.position = "bottom") 
+}
 ```
 
 <!-- Takeaways: -->
@@ -1135,28 +1139,30 @@ cps_hoh_pre_post[YEAR_b == 2019 & hoh_empl_b == TRUE,
 <!-- There's a curious pattern here where, above, lower-income HOHs have the highest rate of unemployment coming from, say, food services, and also have the most over-representation here among those who stayed employed. This could be explained by HOHs switching into these industries. -->
 
 ```{r which industries did people enter, eval = developer_mode}
-cps_hoh_pre_post[YEAR_b == 2019 & hoh_empl_p == TRUE,
-                 j = .(n = .N),
-                 by = .(fam_incpov_ratio_cat_by100_b, hoh_empl_b, hoh_industry_p)] %>% 
-  .[j = pct_in_indust_post := n / sum(n),
-    by = .(fam_incpov_ratio_cat_by100_b, hoh_empl_b)] %>% 
-  ggplot(aes(x = factor(hoh_empl_b, 
-                        levels = 0:1,
-                        labels = c("Not Empl at Base", 
-                                   "Empl at Base")),
-             y = pct_in_indust_post,
-             fill = fam_incpov_ratio_cat_by100_b)) +
-  geom_bar(stat = "identity",
-           position = "dodge") +
-  facet_wrap(~ hoh_industry_p,
-             scales = "free") +
-  scale_y_continuous(labels = percent) +
-  scale_fill_discrete(name = "Income-to-Pov Ratio, at Base") +
-  labs(title = "Percent of Workers in Industry, by Baseline Income and Baseline Employment Status",
-       x = "",
-       y = "Pct in Industry") +
-  theme_minimal() +
-  theme(legend.position = "bottom")
+if (2019 %in% cps_hoh_pre_post$YEAR_b) {
+  cps_hoh_pre_post[YEAR_b == 2019 & hoh_empl_p == TRUE,
+                   j = .(n = .N),
+                   by = .(fam_incpov_ratio_cat_by100_b, hoh_empl_b, hoh_industry_p)] %>% 
+    .[j = pct_in_indust_post := n / sum(n),
+      by = .(fam_incpov_ratio_cat_by100_b, hoh_empl_b)] %>% 
+    ggplot(aes(x = factor(hoh_empl_b, 
+                          levels = 0:1,
+                          labels = c("Not Empl at Base", 
+                                     "Empl at Base")),
+               y = pct_in_indust_post,
+               fill = fam_incpov_ratio_cat_by100_b)) +
+    geom_bar(stat = "identity",
+             position = "dodge") +
+    facet_wrap(~ hoh_industry_p,
+               scales = "free") +
+    scale_y_continuous(labels = percent) +
+    scale_fill_discrete(name = "Income-to-Pov Ratio, at Base") +
+    labs(title = "Percent of Workers in Industry, by Baseline Income and Baseline Employment Status",
+         x = "",
+         y = "Pct in Industry") +
+    theme_minimal() +
+    theme(legend.position = "bottom") 
+}
 ```
 
 <!-- Look again at poverty transitions -->
