@@ -214,7 +214,10 @@ lAgg_for_output <-
             sheet_name = "County"),
        list(agg_table = nowcast_agg_sd,
             agg_field = "school",
-            sheet_name = "School Districts"))
+            sheet_name = "School Districts"),
+       list(agg_table = nowcast_agg_st,
+            agg_field = "State",
+            sheet_name = "State"))
 
 if (exists("my_aux_geo")) {
   lAgg_for_output[[length(lAgg_for_output)+1]] <- 

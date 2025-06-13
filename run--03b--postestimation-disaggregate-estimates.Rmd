@@ -352,6 +352,13 @@ add_agg_level <- function(ests, agg_level) {
                   County   = County, 
                   geo_part = pct_area) %>% 
         unique()
+    } else if (agg_level == "State") {
+      geo_merge_data <- 
+        geo_crosswalk %>% 
+        transmute(GEOID    = GEOID, 
+                  State    = my_state, 
+                  geo_part = 1) %>% 
+        unique()
     } else if (agg_level == "aux_geo_label") {
       geo_merge_data <- 
         geo_crosswalk_aux %>% 
@@ -413,6 +420,7 @@ nowcast_agg_tract <- agg_tracts_up(nowcast_elig_counts_final, "GEOID")
 nowcast_agg_zip   <- agg_tracts_up(nowcast_elig_counts_final, "ZCTA")
 nowcast_agg_cty   <- agg_tracts_up(nowcast_elig_counts_final, "County")
 nowcast_agg_sd    <- agg_tracts_up(nowcast_elig_counts_final, "school")
+nowcast_agg_st    <- agg_tracts_up(nowcast_elig_counts_final, "State")
 
 if (exists("my_aux_geo")) {
   nowcast_agg_aux <- agg_tracts_up(nowcast_elig_counts_final, "aux_geo_label")  
@@ -437,6 +445,7 @@ my_write.csv(nowcast_agg_tract, "by tract")
 my_write.csv(nowcast_agg_zip,   "by zcta")
 my_write.csv(nowcast_agg_cty,   "by county")
 my_write.csv(nowcast_agg_sd,    "by school districts")
+my_write.csv(nowcast_agg_st,    "for entire state")
 
 if (exists("my_aux_geo")) {
   my_write.csv(nowcast_agg_aux, glue("by {my_aux_geo_desc}"))
@@ -453,7 +462,8 @@ to_save <-
   c("nowcast_agg_tract",
     "nowcast_agg_zip",
     "nowcast_agg_cty",
-    "nowcast_agg_sd")
+    "nowcast_agg_sd",
+    "nowcast_agg_st")
 if (exists("my_aux_geo")) {
   to_save <- c(to_save, "nowcast_agg_aux")
 }
