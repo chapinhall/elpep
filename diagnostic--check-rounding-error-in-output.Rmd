@@ -1,0 +1,59 @@
+---
+title: "Check Rounding Error of Estimates"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+```{r}
+# run scripts for necessary packages and objects as necessary
+if (!"meanNA"        %in% objects()) source("settings--main.R", echo = FALSE)
+if (!"my_state_abbr" %in% objects()) source("method--read-customization-file.R", echo = FALSE)
+if (!"bin_age"       %in% objects()) source("method--general-helper-functions.R", echo = FALSE)
+```
+
+
+# Background
+
+There are some apparent rounding errors when adding up counts from different geographic bases (e.g. tract, zip, county, etc) up to the state level, when using counts in the formatted Excel file. A good check for whether this is true is doing the equivalent check, based on numbers from the "simple" csv outputs.
+
+```{r}
+tr_simple <- read.csv(glue("{output_path}Simple elig output by age, period, and outcome -- by tract_{my_output_tag}.csv"))
+zip_simple <- read.csv(glue("{output_path}Simple elig output by age, period, and outcome -- by zcta_{my_output_tag}.csv"))
+cty_simple <- read.csv(glue("{output_path}Simple elig output by age, period, and outcome -- by county_{my_output_tag}.csv"))
+sd_simple <- read.csv(glue("{output_path}Simple elig output by age, period, and outcome -- by school districts_{my_output_tag}.csv"))
+st_simple <- read.csv(glue("{output_path}Simple elig output by age, period, and outcome -- for entire state_{my_output_tag}.csv"))
+
+simple_out <- 
+  list(tr_simple, zip_simple, cty_simple, sd_simple, st_simple)
+```
+
+```{r}
+sums_out <- 
+  lapply(
+  c("tr", "zip", "cty", "sd", "st"),
+  \(x) {
+  get(glue("{x}_simple")) %>% 
+    filter(pd == "nowcast") %>% 
+    summarize(
+      .by = c("age", "pd", "outcome_var", "cps_base_recency"),
+      count = sum(count)) %>% 
+  setnames(old = "count", new = glue("sum_of_{x}_vals"))
+  })
+
+sums_combo <- 
+  Reduce(
+    \(x, y) merge(x, y, by = c("age", "pd", "outcome_var", "cps_base_recency")),
+    sums_out)
+
+sums_combo
+summary(sums_combo)
+
+```
+
+
+
