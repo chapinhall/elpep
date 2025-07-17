@@ -46,12 +46,15 @@ se_sum <- function(moe) {
 
 # STANDARD ERROR FOR PRODUCT OF RANDOM VARIABLES
 
+# Recalling the delta-method formula
+## var(f(A,B)) = var[f + (df/dA)*(\hat{A}-A) + (df/dB)*(\hat{B}-B)]
+##             = (df/dA)^2*var(A) + (df/dB)^2var(B)+2(df/dA)(df/dB)*cov(A,B)
 
 se_product <- function(A, B, A_se, B_se) {
 
-  # Using the delta-method formula
-  ## var(A*B) = [d(A*B)/dA]^2 * var(A) + [d(A*B)/dB]^2 * var(B) + 2 * d(A*B)/dA * d(A*B)/dB * cov(A,B)
-  ##          = [B]^2 * var(A) + [A]^2 *  var(B)  + 2 * [AB] * cov(A, B)
+  # Derivation here:
+  ## var(A*B)  = [d(A*B)/dA]^2*var(A) + (d(A*B)/dB)^2*var(B) + 2*(d(A*B)/dA)*(d(A*B)/dB)*cov(A,B)
+  ##           = B^2*var(A) + A^2*var(B) + 2*AB*cov(A, B)
     
   # Note -- this assumes zero covariance
   sqrt(A^2*B_se^2 + B^2*A_se^2)
@@ -59,10 +62,16 @@ se_product <- function(A, B, A_se, B_se) {
 
 # STANDARD ERROR FOR DERIVED PROPORTION
 
-  # See derivation using Delta Method, above.
+# Following the delta-method formula above, for var(A*B), note:
+# var(A/B) = (df/dA)^2*var(A) + (df/dB)^2var(B)+2(df/dA)(df/dB)*cov(A,B)
+#          = (1/B)^2*var(A) - (A/B^2)^2*var(B) - 2*(A/B^3)cov(A,B)
+#          = (1/B)^2[var(A) – (A/B)^2*var(B) - 2*(A/B)cov(A,B)]
+#          = (1/B)^2[var(A) - A^2*var(B) - 2*(A/B)var(A)]
+#          = (1/B)^2[(1-2*(A/B))*var(A) - (A/B)^2*var(B)]
 
 se_proportion <- function(A, B, se_A, se_B) {
-  return((1/B)*sqrt( (1-(A/B))*(se_A)^2 + (A/B)^2*(se_B)^2) )
+  #return((1/B)*sqrt( (1-(A/B))*(se_A)^2 + (A/B)^2*(se_B)^2) )
+  return( (1/B)*sqrt((1-2*(A/B))*(se_A)^2 + (A/B)^2*(se_B)^2) )
 }
 
 # STANDARD ERROR FOR (NON-PROPORTION) RATIO
