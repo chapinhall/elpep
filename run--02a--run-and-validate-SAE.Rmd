@@ -1424,8 +1424,9 @@ if (FALSE) {
 ```
 
 ```{r save SAE ingredients}
+sae_out_file <- glue("{output_path}sae_sensitivity_estimates_{my_output_tag}.Rda")
 
-if (rerun_sae) {
+if (rerun_sae | !file.exists(sae_out_file)) {
   # Organize contents
   sae_aux_data_acs5 <- acs5tract_sae
   sae_controls_list <- list(sae_controls_simple_05,
@@ -1436,10 +1437,10 @@ if (rerun_sae) {
   
   # Save the bundle of objects
   save(list = c(results, "specs", "incpov_ref_value", "sae_controls_list", "sae_aux_data_acs5"),
-       file = glue("{output_path}sae_sensitivity_estimates_{my_output_tag}.Rda"))
+       file = sae_out_file)
   
 } else {
-  load(file = glue("{output_path}sae_sensitivity_estimates_{my_output_tag}.Rda")) 
+  load(file = sae_out_file) 
 }
 ```
 
