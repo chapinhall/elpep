@@ -187,9 +187,9 @@ We compare transition subsets by geographic subset
 ```{r, eval = developer_mode}
 # Be sure to strip off any file extension provided by users
 cps_raw <- str_replace(cps_raw, "\\.\\w+", "")
-cps_documentation <- read_ipums_ddi(glue("{input_path}{cps_raw}.xml"))
-show_ipums_doc(cps_documentation,
-               fields = c("METRO"))
+#cps_documentation <- read_ipums_ddi(glue("{input_path}{cps_raw}.xml"))
+#show_ipums_doc(cps_documentation,
+#               fields = c("METRO"))
 ```
 
 We compare transition ratios across inclusion of surveyed households by metropolitan residence status.
