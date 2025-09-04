@@ -319,7 +319,7 @@ system.time({
 #     AAN = ETS(pop_interp ~ error("A") + trend("Ad", phi = 0.9) + season("N")) 
 #   )
 
-fc <- fit %>% forecast(h = max(1, base_year + 1 - 2020))
+fc <- fit %>% forecast(h = max(1, base_year + 2 - 2020))
 
 # We end up with some negative values here - 190 observations (<5%)
 # These are tracts with no kids in that age group in ACS - I think this is okay - we'll round up to 0
