@@ -26,19 +26,28 @@ load(glue("{output_path}Now-cast counts at the tract level, pre-disaggregation -
 # 03a. Need to find a way to pass the actual choice from 03a to here. This is not
 # complicated, but just needs light planning.
 
-most_recent_range <- 
-  most_recent_months %>% 
-  sort() %>% 
-  paste0("-01") %>% 
-  as.Date()
-date1 <- most_recent_range[1]
-date2 <- most_recent_range %>% .[length(.)]
-if (year(date1) == year(date2)) {
-  date_range <- paste0(format(date1, "%b"), "-",
-                       format(date2, "%b %Y"))
-} else {
-  date_range <- paste0(format(date1, "%b %Y"), "-",
-                       format(date2, "%b %Y"))
+label_date_range <- 
+  function(my_months) {
+    my_months_range <- 
+      my_months %>% 
+      sort() %>% 
+      paste0("-01") %>% 
+      as.Date()
+    
+    date1 <- my_months_range[1]
+    date2 <- my_months_range %>% .[length(.)]
+    if (year(date1) == year(date2)) {
+      date_range <- paste0(format(date1, "%b"), "-",
+                           format(date2, "%b %Y"))
+    } else {
+      date_range <- paste0(format(date1, "%b %Y"), "-",
+                           format(date2, "%b %Y"))
+    }  
+    return(date_range)
+}
+if (FALSE) {
+  label_date_range(most_recent_months)
+  label_date_range(most_recent_sy_months)
 }
 ```
 
@@ -51,7 +60,13 @@ ccdf_income_thresh_label <-
 
 
 ```{r function to output excel sheets for various levels of geographic aggregation}
-write_agg_output <- function(outcomes_regex, age_regex = ".+", agg_levels, recency = "most_recent", out_label) {
+write_agg_output <- 
+  function(
+    outcomes_regex, 
+    age_regex = ".+", 
+    agg_levels, 
+    recency = "most_recent", 
+    out_label) {
 
   if (exists("excel_front_page_file")) {
     #addWorksheet(wb, "Front page")
@@ -63,9 +78,12 @@ write_agg_output <- function(outcomes_regex, age_regex = ".+", agg_levels, recen
     wb <- openxlsx::createWorkbook()
   }
   
-  date_label <- ifelse(recency == "most_recent",
-                       date_range,
-                       glue("Calendar Year {base_year + 1}"))
+  date_label <- 
+    case_match(
+      recency,
+      "most_recent" ~ label_date_range(most_recent_months),
+      "sy"          ~ label_date_range(most_recent_sy_months),
+      "allbase"     ~ glue("Calendar Year {base_year + 1}"))
   
   for (lvl in agg_levels) {
     add_sheet <-
@@ -74,7 +92,9 @@ write_agg_output <- function(outcomes_regex, age_regex = ".+", agg_levels, recen
       setnames(lvl[["agg_field"]], lvl[["sheet_name"]]) %>% 
       filter(pd == "nowcast",
              cps_base_recency == recency,
-             str_detect(outcome_var, outcomes_regex)) %>% 
+             str_detect(outcome_var, outcomes_regex),
+             get(lvl[["sheet_name"]]) != "") %>% 
+               # remove rows with blank values for the geography
       select(-cps_base_recency) %>% 
       merge(age_aggs %>% 
               transmute(age = age_group_lab, 
@@ -233,11 +253,13 @@ if (my_state_abbr == "IL") {
          sheet_name = "Birth To Five")
 }
 
-write_agg_output(outcomes_regex = outcomes_out_regex,
-                 #age_regex      = "age(_3$|_4$|_infant$|_toddler$)", # "_0to2|_3to5|_0to5|_6to12"
-                 agg_levels     = lAgg_for_output,
-                 recency        = "most_recent",                      # "allbase" for calendar year of base_year + 1
-                 out_label      = local_ccdf_name_short)
+write_agg_output(
+  outcomes_regex = outcomes_out_regex,
+  #age_regex      = "age(_3$|_4$|_infant$|_toddler$)", # "_0to2|_3to5|_0to5|_6to12"
+  agg_levels     = lAgg_for_output,
+  recency        = ifelse(str_detect(my_output_tag, "CECIDS"), "sy", "most_recent"),  
+    # "allbase" for calendar year of base_year + 1
+  out_label      = local_ccdf_name_short)
 
 ```
 
@@ -304,6 +326,9 @@ if (exists("custom_income_thresh")) {
 #### Map Levels and Differences
 
 ```{r generate static plots}
+
+date_range <- label_date_range(most_recent_months)
+
 static_map_val <- function(estimates,
                            geo_level,
                            geo_level_merge_field = geo_level,
