@@ -226,11 +226,17 @@ if (exists("my_aux_geo")) {
          sheet_name = my_aux_geo_desc)
 }
 
-if (my_state_abbr == "IL") {
+if (str_detect(my_output_tag, "IECAM")) {
   lAgg_for_output[[length(lAgg_for_output)+1]] <- 
     list(agg_table = nowcast_agg_b5,
          agg_field = "b5",
          sheet_name = "Birth To Five")
+}
+if (str_detect(my_output_tag, "CECIDS")) {
+  lAgg_for_output[[length(lAgg_for_output)+1]] <- 
+    list(agg_table = nowcast_agg_distr,
+         agg_field = "distr",
+         sheet_name = "Local School District")
 }
 
 write_agg_output(outcomes_regex = outcomes_out_regex,
