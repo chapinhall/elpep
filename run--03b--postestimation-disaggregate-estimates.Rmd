@@ -123,20 +123,14 @@ nowcast_parallel_counts <-
   data.table()
 
 # Prep overall population for under 5 breakdown
-pop_by_age_0to5 <- 
-  pop_by_age %>% 
-  select(GEOID = GEOID_TR20, year, 
-         # age_3to5 = age_3to5_count, 
-         # age_0to5 = age_0to5_count, 
-         age_0 = age_0_count,
-         age_1 = age_1_count,
-         age_2 = age_2_count,
-         age_3 = age_3_count,
-         age_4 = age_4_count,
-         age_5 = age_5_count) %>% 
-  pivot_longer(cols = matches("age"),
-               names_to = "child_agegroup",
-               values_to = "pop_count")
+pop_by_age_long_0to5 <- 
+  pop_by_age_long_recency %>% 
+  select(
+    GEOID, year, age, pd, cps_base_recency, pop_count, pop_count_se) %>% 
+  filter(
+    age %in% c("age_0", "age_1", "age_2", "age_3", "age_4", "age_5"))
+  # Separate out the estimates for ages 0-5, which is the age group that we want
+  # to disaggregate with other population breakdown information
 
 nowcast_elig_counts_0to5 <- 
   nowcast_parallel_counts %>% 
@@ -155,21 +149,27 @@ nowcast_elig_counts_0to5 <-
   #   select(-pop_count) %>%
   # mutate(count    = pct_age_of_0to5 * count,
   #        count_se = pct_age_of_0to5 * count_se) %>% 
-  merge(pop_by_age_0to5 %>% rename(age = child_agegroup),
-        by = c("GEOID", "year"), # , "age"
-        all.x = TRUE,
-        allow.cartesian = TRUE) %>% 
+  merge(
+    pop_by_age_long_0to5,
+    by = c("GEOID", "year", "pd", "cps_base_recency"),
+    all.x = TRUE,
+    allow.cartesian = TRUE) %>% 
   # Apply the overall 0-5 share to the population counts of the individual-age
   # population groups to obtain the new count and count_se estimates.
   # /!\ Note that as of the current version of code, pop_count is still assumed
   # to be measured without error. Otherwise, use of se_product() would be used.
-  mutate(count    = pop_count*share,
-         count_se = pop_count*share_se)
+  mutate(
+    count    = pop_count*share,
+    count_se = se_product(share, pop_count, share_se, pop_count_se))
 
+# Add these by-single-age values to the other estimates we have so far
 nowcast_elig_counts_added_ages <- 
-  bind_rows(nowcast_elig_counts_0to5,
-            nowcast_parallel_counts) %>% 
-  select(outcome_var, GEOID, cps_base_recency, pd, year, age, share, share_se, count, count_se, pop_count, pop_count_se) %>% 
+  bind_rows(
+    nowcast_elig_counts_0to5,
+    nowcast_parallel_counts) %>% 
+  select(
+    outcome_var, GEOID, cps_base_recency, pd, year, age, 
+    share, share_se, count, count_se, pop_count, pop_count_se) %>% 
   arrange(outcome_var, GEOID, pd, age) %>% 
   data.table()
 
