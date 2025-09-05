@@ -365,12 +365,18 @@ add_agg_level <- function(ests, agg_level) {
         transmute(GEOID         = GEOID, 
                   aux_geo_label = aux_geo_label, 
                   geo_part      = pct_area)
-    } else if (my_state_abbr == "IL") {
+    } else if (str_detect(my_output_tag, "IECAM")) {
       geo_merge_data <- 
         geo_crosswalk_b5 %>% 
         transmute(GEOID         = GEOID, 
                   b5            = b5, 
                   geo_part      = pct_b5)
+    } else if (str_detect(my_output_tag, "CECIDS")) {
+      geo_merge_data <- 
+        geo_crosswalk_distr %>% 
+        transmute(GEOID         = GEOID, 
+                  distr         = LONGNAME,
+                  geo_part      = pct_area)
     } 
     
     ests <- 
@@ -426,8 +432,11 @@ if (exists("my_aux_geo")) {
   nowcast_agg_aux <- agg_tracts_up(nowcast_elig_counts_final, "aux_geo_label")  
 }
 
-if (my_state_abbr == "IL") {
+if (str_detect(my_output_tag, "IECAM")) {
   nowcast_agg_b5 <- agg_tracts_up(nowcast_elig_counts_final, "b5")
+}
+if (str_detect(my_output_tag, "CECIDS")) {
+  nowcast_agg_distr <- agg_tracts_up(nowcast_elig_counts_final, "distr")
 }
 
 ```
@@ -451,8 +460,11 @@ if (exists("my_aux_geo")) {
   my_write.csv(nowcast_agg_aux, glue("by {my_aux_geo_desc}"))
 }
 
-if (my_state_abbr == "IL") {
+if (str_detect(my_output_tag, "IECAM")) {
   my_write.csv(nowcast_agg_b5, "by b5 regions")
+}
+if (str_detect(my_output_tag, "CECIDS")) {
+  my_write.csv(nowcast_agg_distr, "by local school district")
 }
 
 ```
@@ -467,8 +479,11 @@ to_save <-
 if (exists("my_aux_geo")) {
   to_save <- c(to_save, "nowcast_agg_aux")
 }
-if (my_state_abbr == "IL") {
+if (str_detect(my_output_tag, "IECAM")) {
   to_save <- c(to_save, "nowcast_agg_b5")
+}
+if (str_detect(my_output_tag, "CECIDS")) {
+  to_save <- c(to_save, "nowcast_agg_distr")
 }
 
 save(list = to_save,
