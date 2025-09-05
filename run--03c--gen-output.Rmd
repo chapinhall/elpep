@@ -87,8 +87,12 @@ write_agg_output <- function(outcomes_regex, age_regex = ".+", agg_levels, recen
                       str_replace(outcome_var, 
                                   "ccdf_elig_incratio_(\\d+)",
                                   glue("{local_ccdf_name_short} - \\1% {ccdf_income_thresh_label}")),
+                    # /!\ In cases of other thresholds being of interest, could
+                    # replace these "_le(\\d+)_" assignments with a more robust
+                    # one using regular expressions
                     str_detect(outcome_var, "_le50_")  ~ "Below 50% FPL",
                     str_detect(outcome_var, "_le100_") ~ "Below 100% FPL",
+                    str_detect(outcome_var, "_le130_") ~ "Below 130% FPL",
                     str_detect(outcome_var, "_le185_") ~ "Below 185% FPL",
                     str_detect(outcome_var, "_le200_") ~ "Below 200% FPL",
                     str_detect(outcome_var, "_le225_") ~ "Below 225% FPL",

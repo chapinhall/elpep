@@ -41,8 +41,8 @@ nowcast_parallel_setup <-
   nowcast_selected_sens %>%
   # /!\ Need to produce/bring in standard errors for the SAE. Assigning these 0
   # as a placeholder.
-  mutate(base_share_se = 0,
-         nowcast_share = elig_share,
+  mutate(base_share_se    = 0,
+         nowcast_share    = elig_share,
          nowcast_share_se = elig_share_se)
 
 # For each output, select the sensitivity and (calculation of) related measure
@@ -64,6 +64,12 @@ nowcast_parallel_incpov_le100 <-
   filter(outcome_var == "incpov_le100_post_adj",
          str_detect(sae_spec, "incpov_ctrls_100")) %>% 
   mutate(base_share = share_0_100)
+
+nowcast_parallel_incpov_le130 <- 
+  nowcast_parallel_setup %>% 
+  filter(outcome_var == "incpov_le130_post_adj",
+         str_detect(sae_spec, "incpov_ctrls_100")) %>% 
+  mutate(base_share = NA)
 
 nowcast_parallel_incpov_le185 <- 
   nowcast_parallel_setup %>% 
@@ -92,6 +98,7 @@ nowcast_parallel_incpov_le400 <-
 bind_list <- 
   list(nowcast_parallel_incpov_le50,
        nowcast_parallel_incpov_le100,
+       nowcast_parallel_incpov_le130,
        nowcast_parallel_incpov_le185,
        nowcast_parallel_incpov_le200,
        nowcast_parallel_incpov_le225,
