@@ -157,30 +157,65 @@ nowcast_parallel <-
 ```{r merge population stats to calculate counts}
 pop_by_age_long <- 
   pop_by_age %>% 
-  pivot_longer(cols = matches("age_.+_count")) %>% 
-  mutate(age = str_replace(name, "_count", ""),
-         pd = case_when(year == base_year     ~ "base",
-                        year == base_year + 1 ~ "nowcast")) %>% 
-  rename(pop_count = value,
-         GEOID = GEOID_TR20) %>%
+  pivot_longer(
+    cols = matches("age_.+_count")) %>% 
+  mutate(
+    age = str_replace(name, "_count", ""),
+    pd = case_when(year == base_year     ~ "base",
+                   year == base_year + 1 ~ "nowcast")) %>% 
+  rename(
+    pop_count = value,
+    GEOID = GEOID_TR20) %>%
   # /!\ Here again is where we need to bring in a proper standard error for
   # population count estimates
   mutate(pop_count_se = 0) %>% 
   dplyr::select(-name)
 
+# Create a school-year aligned blend of population
+pop_by_age_long_sy <- 
+  pop_by_age_long %>% 
+  arrange(GEOID, age, year) %>% 
+  mutate(
+    .by = c(GEOID, age),
+    pop_count_lag1    = shift(pop_count,    type = "lag"),
+    pop_count_se_lag1 = shift(pop_count_se, type = "lag")) %>% 
+  # To calculate a school-year aligned population count, we recognize that the 
+  # age data are reported by calendar year, that we assume that birthdays are
+  # uniformly distributed across the calendar year, and that 6 year olds in the
+  # 2024-25 school year--for example--are 2/3 those who turn 6 in 2024 (i.e. the
+  # 8 months before September 1 2024, and 1/3 of those who turned 6 in the 4
+  # months after September 1, 2023. We carry this calculation to all years and
+  # ages.
+  mutate(
+    pop_count_sy    = (2/3)*pop_count    + (1/3)*pop_count_lag1,
+    pop_count_se_sy = (2/3)*pop_count_se + (1/3)*pop_count_se_lag1) 
+
+pop_by_age_long_recency <- 
+  bind_rows(
+    pop_by_age_long %>% 
+      mutate(cps_base_recency = "allbase"),
+    pop_by_age_long %>% 
+      mutate(cps_base_recency = "most_recent"),
+    pop_by_age_long_sy %>% 
+      select(GEOID, year, age, pd, pop_count = pop_count_sy, pop_count_se = pop_count_se_sy) %>% 
+      mutate(cps_base_recency = "sy"))
+
 nowcast_parallel_counts <- 
   nowcast_parallel %>% 
-  merge(pop_by_age_long,
-        by = c("GEOID", "age", "pd"),
-        all.x = TRUE) %>% 
+  merge(
+    pop_by_age_long_recency,
+    by = c("GEOID", "age", "pd", "cps_base_recency"),
+    all.x = TRUE) %>% 
   data.table() %>%
-  mutate(count    = share*pop_count,
-         count_se = se_product(share, pop_count, share_se, pop_count_se))
+  mutate(
+    count    = share*pop_count,
+    count_se = se_product(share, pop_count, share_se, pop_count_se))
 ```
 
 ```{r save results}
 save(nowcast_parallel_counts,
-     most_recent_months,
+     most_recent_months, most_recent_sy_months, 
+     pop_by_age_long_recency,
      file = glue("{output_path}Now-cast counts at the tract level, pre-disaggregation - {my_output_tag}.Rda"))
 ```
 

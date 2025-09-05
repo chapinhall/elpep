@@ -402,16 +402,30 @@ cps_child_base_post[j = YEAR_MONTH_p := paste(YEAR_p,
                                               str_pad(MONTH_p, side = "left", pad = "0", width = 2), 
                                               sep = "-")]
 
-most_recent_months <- 
+recent_cps_months <- 
   cps_child_base_post %>% 
   pull(YEAR_MONTH_p) %>% 
   setdiff("NA-NA") %>% 
   unique() %>% 
-  sort(decreasing = TRUE) %>% 
+  sort(decreasing = TRUE)
+
+most_recent_months <- 
+  recent_cps_months %>% 
   .[1:3]
+
+# This is an expansion currently targeted for running mid-summer when seeking
+# CPS post-period status aligned with roughly the school year.
+# /!\ Refinements are anticipated and welcome.
+last_september_i <- match(glue("{base_year+1}-09"), recent_cps_months)
+most_recent_sy_months <- 
+  recent_cps_months %>% 
+  .[1:last_september_i]
 
 cps_reg_sample_most_recent <- 
   cps_child_base_post[YEAR_MONTH_p %in% most_recent_months]
+
+cps_reg_sample_most_recent_sy <- 
+  cps_child_base_post[YEAR_MONTH_p %in% most_recent_sy_months]
 
 # Select all 
 cps_reg_sample_allbase <- 
@@ -610,10 +624,11 @@ nowcast_betas_out <- NULL
 specs <- setdiff(specs, str_subset(specs, "wk_sp"))
 
 # Loop across CPS 
-for (cps_recency in c("most_recent", "allbase")) {
+for (cps_recency in c("most_recent", "allbase", "sy")) {
   
   cps_reg_data <- switch(cps_recency,
                          "most_recent" = cps_reg_sample_most_recent,
+                         "sy"          = cps_reg_sample_most_recent_sy,
                          "allbase"     = cps_reg_sample_allbase)
   
   # Loop across CPS subsamples
@@ -758,6 +773,7 @@ save(key_nowcast_out,
      nowcast_out,
      nowcast_betas_out,
      most_recent_months,
+     most_recent_sy_months,
      file = glue("{output_path}Eligibility estimates using conditional transition ratio - {my_output_tag}.Rda"))
 ```
 

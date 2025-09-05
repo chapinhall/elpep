@@ -803,11 +803,12 @@ cps_post <-
          incpov_le225_post     = fam_incpov_ratio_le2.25,
          incpov_le225_post_adj = fam_incpov_ratio_le2.25_adj,
          incpov_le400_post     = fam_incpov_ratio_le4.00,
-         incpov_le400_post_adj = fam_incpov_ratio_le4.00_adj)
-dim(cps_post)
-cps_post <- unique(cps_post)
-dim(cps_post)
-# /!\ Not sure why this unique() operation is needed, but it is. Perhaps some upstream merge?
+         incpov_le400_post_adj = fam_incpov_ratio_le4.00_adj) %>% 
+  unique() %>% 
+    # The unique() is used to collapse household/HOH fields (which is all that is
+    # preserved) to the household (designated by CPSID) rather than individual record
+  filter(CPSID %in% unique(cps_child_base$CPSID))
+    # Only preserve records for households that correspond to a child record
 ```
 
 ```{r clean up files}
