@@ -939,7 +939,7 @@ if (str_detect(my_output_tag, "CECIDS")) {
       pct_area = pct_area / sum(pct_area))
   
 }
-
+```
 
 ```{r checks the total area land}
 sum(tractShp$ALAND)
