@@ -135,7 +135,7 @@ pop_by_age_long_0to5 <-
 nowcast_elig_counts_0to5 <- 
   nowcast_parallel_counts %>% 
   filter(age == "age_0to5") %>%
-  select(-age, -pop_count) %>% 
+  select(-age, -pop_count, -pop_count_se) %>% 
   # /!\ We are no longer using data from the ACS1 data on the distribution of
   # single ages <6, given how much apparent sampling variation there is. In 
   # particular, in sample applications we saw that the overall age distribution 
@@ -371,11 +371,17 @@ add_agg_level <- function(ests, agg_level) {
         transmute(GEOID         = GEOID, 
                   b5            = b5, 
                   geo_part      = pct_b5)
-    } else if (str_detect(my_output_tag, "CECIDS")) {
+    } else if (str_detect(my_output_tag, "CECIDS") && agg_level == "distr") {
       geo_merge_data <- 
         geo_crosswalk_distr %>% 
         transmute(GEOID         = GEOID, 
                   distr         = LONGNAME,
+                  geo_part      = pct_area)
+    } else if (str_detect(my_output_tag, "CECIDS") && agg_level == "network") {
+      geo_merge_data <- 
+        geo_crosswalk_network %>% 
+        transmute(GEOID         = GEOID, 
+                  network       = planningzo,
                   geo_part      = pct_area)
     } 
     
@@ -436,7 +442,8 @@ if (str_detect(my_output_tag, "IECAM")) {
   nowcast_agg_b5 <- agg_tracts_up(nowcast_elig_counts_final, "b5")
 }
 if (str_detect(my_output_tag, "CECIDS")) {
-  nowcast_agg_distr <- agg_tracts_up(nowcast_elig_counts_final, "distr")
+  nowcast_agg_distr   <- agg_tracts_up(nowcast_elig_counts_final, "distr")
+  nowcast_agg_network <- agg_tracts_up(nowcast_elig_counts_final, "network")
 }
 
 ```
@@ -464,7 +471,8 @@ if (str_detect(my_output_tag, "IECAM")) {
   my_write.csv(nowcast_agg_b5, "by b5 regions")
 }
 if (str_detect(my_output_tag, "CECIDS")) {
-  my_write.csv(nowcast_agg_distr, "by local school district")
+  my_write.csv(nowcast_agg_distr,   "by local school district")
+  my_write.csv(nowcast_agg_network, "by CPS elementary network")
 }
 
 ```
@@ -484,6 +492,7 @@ if (str_detect(my_output_tag, "IECAM")) {
 }
 if (str_detect(my_output_tag, "CECIDS")) {
   to_save <- c(to_save, "nowcast_agg_distr")
+  to_save <- c(to_save, "nowcast_agg_network")
 }
 
 save(list = to_save,
