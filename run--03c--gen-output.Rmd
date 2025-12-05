@@ -261,6 +261,10 @@ if (str_detect(my_output_tag, "CECIDS")) {
     list(agg_table = nowcast_agg_distr,
          agg_field = "distr",
          sheet_name = "Local School District")
+  lAgg_for_output[[length(lAgg_for_output)+1]] <- 
+    list(agg_table = nowcast_agg_network,
+         agg_field = "network",
+         sheet_name = "CPS Elementary Network")
 }
 
 write_agg_output(
