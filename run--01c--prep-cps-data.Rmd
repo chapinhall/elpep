@@ -731,7 +731,6 @@ cps_child_base <-
           "fam_incpov_ratio_cat_by50",    "fam_incpov_ratio_cat_by50_adj", 
           "fam_incpov_ratio_cat_by75",    "fam_incpov_ratio_cat_by75_adj",
           "fam_incpov_ratio_cat_by100",   "fam_incpov_ratio_cat_by100_adj",
-          "fam_incpov_ratio_cat_by130",   "fam_incpov_ratio_cat_by130_adj",
           "fam_incpov_ratio_cat_to185",   "fam_incpov_ratio_cat_to185_adj",
           "fam_incpov_ratio_cat_hs_ccdf", "fam_incpov_ratio_cat_hs_ccdf_adj"),
     with = FALSE] %>% 
