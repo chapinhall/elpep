@@ -347,6 +347,8 @@ ccdf_inc_thresh_fpl <- get_fpl_thresh_for_ccdf()
 
 
 ```{r develop income to poverty ratio and ccdf/ccap eligibility for cps considering economic impact payments}
+
+set.seed(60637)
 cps_pov <-
   cps_pov %>% 
   
