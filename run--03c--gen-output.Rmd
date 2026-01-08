@@ -624,6 +624,209 @@ if (exists("map_geos")) {
 }
 ```
 
+```{r remove portions of shapes that are over lake michigan, eval = str_detect(my_output_tag, "CECIDS|IECAM")}
+
+#install.packages(c("rnaturalearth", "rnaturalearthdata"))
+library(rnaturalearth)
+library(rnaturalearthdata)
+
+target_crs <- st_crs(tractShp)
+
+lakes <- 
+  rnaturalearth::ne_download(
+    scale = "large",
+    type = "lakes",
+    category = "physical",
+    returnclass = "sf") %>% 
+  st_transform(target_crs)
+
+lake_michigan <- lakes %>% filter(name == "Lake Michigan")
+
+# Function to subtract the lake from tracts that touch Chicago (or from all tracts) ---
+subtract_lake <- function(my_shp) {
+  
+  my_shp <- st_transform(my_shp, target_crs)
+  
+  # This subsets to only Chicago intersections, temporarily
+  # idx_touch_chi <- lengths(st_intersects(my_shp, chi_map)) > 0
+  # my_shp_chi <- my_shp[idx_touch_chi, ]
+  
+  tracts_no_lake <- st_difference(my_shp, st_union(lake_michigan))
+  tracts_no_lake <- tracts_no_lake[!st_is_empty(tracts_no_lake), ]
+    # Drop any empty geometries (purely water tracts become empty after subtraction)
+  
+  #rbind(my_shp[!idx_touch_chi, ], tracts_no_lake)  
+  return(tracts_no_lake)
+}
+
+tractShp_nolake <- subtract_lake(tractShp)
+pumaShp_nolake  <- subtract_lake(pumaShp)
+auxShp_nolake   <- subtract_lake(auxShp)
+```
+
+```{r Function to build the bare bones of the 'story' maps}
+
+story_map <- 
+  function(
+    shpEsts, 
+    fill_var,
+    val_limits, 
+    bbox, 
+    save_tag, 
+    color_opt = "viridis", 
+    save_map = TRUE, 
+    add_hp = FALSE) {
+    
+  base <- 
+    shpEsts %>% 
+    ggplot() +
+    #annotation_map_tile(type = "cartolight", zoomin = -1, alpha = 0.7) +
+    geom_sf(
+      aes(fill = get(fill_var)),
+      linewidth = 0.025,
+      color = "black")
+  
+  if (str_detect(my_output_tag, "CECIDS|IECAM")) {
+    base <- 
+      base + 
+      geom_sf(
+        data = auxShp_nolake,
+        color = "red",
+        linewidth = 1,
+        fill = NA)
+    if (add_hp) {
+      base <- 
+      base + 
+      geom_sf(
+        data = auxShp_nolake %>% filter(community == "HYDE PARK"),
+        color = NA,
+        fill = "red",
+        alpha = 0.8)  
+    }
+  }
+  
+  story_plot <- 
+    base +
+    geom_sf(
+      data = pumaShp_nolake,
+      color = "chartreuse4",
+      fill = NA,
+      linewidth = 2) +
+    scale_fill_viridis_c(
+      name = "",
+      limits = val_limits, 
+      option = color_opt,
+      #trans = fill_trans,
+      labels = percent,
+      alpha = 1) + 
+    coord_sf(
+      xlim = with(bbox, c(xmin, xmax)),
+      ylim = with(bbox, c(ymin, ymax))) +
+    theme_void()
+  
+  ggsave(
+    filename = glue("{output_path}Story Map -- {save_tag}.png"),
+    plot = story_plot)
+  # width = X,
+  # height = X,
+  # units = "in
+
+  print(story_plot)
+}
+```
+
+
+```{r generate progression of maps to explain story of estimation}
+
+### These are defaults set for telling the story of estimation
+# /!\ In the future, these could be generalized as inputs
+story_ages <- "Pre-K 4"
+story_outcome <- "ccdf_elig_incratio_225"
+story_ccdf_cut <- "225"
+story_recency <- "most_recent"
+story_bbox <- list(xmin = -87.672438, xmax = -87.561779, ymin = 41.757867, ymax = 41.821629)
+  # This can be identified from web tools like: https://tools.mofei.life/bbox
+
+
+### Plot final, now-cast estimates
+story_ests_final <- 
+  nowcast_agg_tract %>% 
+  filter(
+    age == story_ages,
+    outcome_var == glue("ccdf_elig_incratio_{story_ccdf_cut}"),
+    pd == "nowcast",
+    cps_base_recency == story_recency)
+shp_final <- 
+  tractShp_nolake %>% 
+  merge(
+    story_ests_final,
+    by = "GEOID")
+val_limits <- range(story_ests_final$share, na.rm = T)
+
+story_map(
+  shp_final, 
+  fill_var = "share", 
+  val_limits, 
+  story_bbox, 
+  glue("final ELPEP CCDF, {story_ages}"))
+
+# If the output is specific to CECIDS or IECAM, create a second plot highlighting Hyde Park
+if (str_detect(my_output_tag, "CECIDS|IECAM")) {
+  story_map(
+    shp_final, 
+    fill_var = "share",
+    val_limits, 
+    story_bbox, 
+    glue("final ELPEP CCDF, {story_ages}, HP highlight"), 
+    add_hp = TRUE)  
+}
+
+### Base SAE estimates
+
+### ACS1 as basis, but highly aggregate
+load(file = glue("{output_path}acs1_data_{my_output_tag}.Rda"))
+story_ests_acs1 <- 
+  acs1_child %>% 
+  filter(
+    AGEP %in% c(0, 5)) %>% 
+  summarize(
+    .by = PUMA,
+    share = 
+      sum(PWGTP[get(glue("ccdf_elig_incratio_{story_ccdf_cut}")) == 1]) /
+      sum(PWGTP))
+shp_acs1 <- 
+  pumaShp_nolake %>% 
+  merge(
+    story_ests_acs1,
+    by = "PUMA")
+story_map(
+  shp_acs1, 
+  fill_var = "share",
+  val_limits, 
+  story_bbox, 
+  glue("ACS1 CCDF, {story_ages}"))
+
+
+### ACS5 as predictor: wrong measure, but captures spatial heterogeneity
+load(file = glue("{output_path}acs5_data_{my_output_tag}.Rda"))
+story_ests_acs5 <- 
+  tractShp_nolake %>% 
+  merge(
+    acs5tract %>% 
+      select(GEOID, incpov_lt6_r0to100_est, incpov_lt6_r100to199_est) %>% 
+      mutate(share = incpov_lt6_r0to100_est + incpov_lt6_r100to199_est),
+    by = "GEOID")
+      
+story_map(
+  story_ests_acs5,
+  fill_var = "share",
+  val_limits = range(story_ests_acs5$share), 
+  story_bbox,
+  glue("ACS5 200pct FPL, {story_ages}"), 
+  color_opt = "plasma")
+
+```
+
 
 <!-- /!\ Could also consider generating a series of maps to show the logical progression of 
   ## ACS1 (PUMA)                    ... shows basic, baseline data
