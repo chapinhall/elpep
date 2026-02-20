@@ -54,10 +54,63 @@ for (i in 1:length(elpep_spec_names)) {
 
 ### Set years for pulling data ------------------------------------------------#
 
-if (!exists("base_year")) base_year <- 2023
-base_year <- min(base_year, 2023)
+# Get the year of the latest ACS 1-year, and use that to limit the requested base-year
+# if needed
 
-acs5_year <- min(base_year + 2, 2023)
+get_latest_pums_acs1_year <- function(start_from = as.integer(format(Sys.Date(), "%Y"))) {
+  years <- seq(start_from, 2005, by = -1)
+  for (y in years) {
+    ok <- tryCatch({
+      # minimal request: one state, one variable, small pull
+      df <- 
+        get_pums(
+          variables = c("AGEP"),
+          state = my_state_abbr,
+          year = y,
+          survey = "acs1",
+          variables_filter = list(AGEP = 30:31),
+          show_call = FALSE
+        )
+      nrow(df) > 0
+    }, error = function(e) FALSE)
+    if (ok) return(y)
+  }
+  NA_integer_
+}
+
+latest_pums_acs1_year <- get_latest_pums_acs1_year()
+
+if (!exists("base_year")) base_year <- latest_pums_acs1_year
+base_year <- min(base_year, latest_pums_acs1_year)
+
+# Get the year of the latest ACS 5-year, and use that to set the pull
+
+get_latest_acs5_year <- function(start_from = as.integer(format(Sys.Date(), "%Y"))) {
+  years <- seq(start_from, 2010, by = -1)  # practical lower bound for acs5 "endyear"
+  for (y in years) {
+    ok <- tryCatch({
+      df <- 
+        get_acs(
+          geography = "state", 
+          variables = "B01003_001", # This is simply the total population, which is reported every year 
+          year = y, 
+          survey = "acs5", 
+          output = "tidy", 
+          state = my_state_fip
+        )
+      nrow(dat) > 0
+    }, error = function(e) FALSE)
+    if (ok) return(y)
+  }
+  NA_integer_
+}
+
+latest_acs5_year <- get_latest_acs5_year()
+
+# Seek the ACS 5 year pull so that the ACS 1 year corresponds to the middle of
+# the 5-year range. Note that this will only differ from the most recent ACS 5-year
+# data if the base year is chosen to be several years in the past.
+acs5_year <- min(base_year + 2, latest_acs5_year)
 
 
 ### Fix potential issues with file paths --------------------------------------#
