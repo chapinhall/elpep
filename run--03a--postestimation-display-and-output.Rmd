@@ -19,6 +19,7 @@ load(file = glue("{output_path}Eligibility estimates using conditional transitio
 load(file = glue("{output_path}pop_data_{my_output_tag}.Rda"))
 load(file = glue("{output_path}geo_data_{my_output_tag}.Rda"))
 load(file = glue("{output_path}acs5_data_{my_output_tag}.Rda"))
+load(file = glue("{output_path}cps_data_{my_output_tag}.Rda"))
 ```
 
 ```{r select a sensitivity}
@@ -155,14 +156,17 @@ nowcast_parallel <-
 ```
 
 ```{r merge population stats to calculate counts}
+# Identify the year of the latest CPS data
+latest_cps_year <- max(cps_post$YEAR)
+
 pop_by_age_long <- 
   pop_by_age %>% 
   pivot_longer(
     cols = matches("age_.+_count")) %>% 
   mutate(
     age = str_replace(name, "_count", ""),
-    pd = case_when(year == base_year     ~ "base",
-                   year == base_year + 1 ~ "nowcast")) %>% 
+    pd = case_when(year == latest_cps_year - 1 ~ "base",
+                   year == latest_cps_year     ~ "nowcast")) %>% 
   rename(
     pop_count = value,
     GEOID = GEOID_TR20) %>%
