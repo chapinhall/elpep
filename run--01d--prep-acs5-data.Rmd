@@ -204,9 +204,67 @@ save(acs5tract, acs5puma,
      file = glue("{output_path}acs5_data_{my_output_tag}.Rda"))
 ```
 
+## Build Supplementary ACS5 Measures
+
+<!-- 
+These are motivated by expansions of ELPEP beyond child care to other public assistance.
+What's novel here is the use of the `method--pull-and-process-acs5.R` code to pull these,
+which could be used to replace the lengthy and awkward `pull--acs5-general-data.R` code.
+-->
+
 ```{r prepare county argument for fresh pull of acs5 data}
 if (exists("my_county_fip")) county_val <- my_county_fip else county_val <- NULL
 ```
+
+```{r pull; inspect; and build constructions for veteran status}
+acs5_vetstatus_bySexAge_raw <- pull_table("B21001", state = my_state_abbr, county = county_val, year = acs5_year)
+
+inspect_fields(acs5_vetstatus_bySexAge_raw, show_all_combos = TRUE)
+
+acs5_vetstatus <- 
+  construct_fields(
+    df = acs5_vetstatus_bySexAge_raw,
+    numerator = "vet_status",
+    subset_cond = "age %in% c('Age18to34', 'Age35to54', 'Age55to64')",
+    subset_descr = "")
+
+
+```
+
+
+```{r pull; inspect; and build constructions for disability}
+acs5_disab_bySexAge_raw     <- pull_table("B18101", state = my_state_abbr, county = county_val, year = acs5_year)
+
+inspect_fields(acs5_disab_bySexAge_raw, show_all_combos = TRUE)
+
+acs5_disab <- 
+  construct_fields(
+    df = acs5_disab_bySexAge_raw,
+    numerator = "disab_status",
+    subset_cond = "age %in% c('Age18to34', 'Age35to64')",
+    subset_descr = "")
+
+
+```
+
+
+```{r pull; inspect; and build constructions for health insurance}
+acs5_healthins_bySexAge_raw <- pull_table("B27001", state = my_state_abbr, county = county_val, year = acs5_year)
+
+inspect_fields(acs5_healthins_bySexAge_raw, show_all_combos = TRUE)
+
+acs5_healthins <- 
+  construct_fields(
+    df = acs5_healthins_bySexAge_raw,
+    numerator = "health_ins_cov",
+    subset_cond = "age %in% c('Age18to34', 'Age35to54', 'Age55to64')",
+    subset_descr = "")
+
+
+```
+
+
+## Build ACS5-based Estimate of Correlation Between Income and Work Status
 
 ```{r fresh pull of both income and work status tables}
 # "Age by Ratio of Income to Poverty Level In the Past 12 Months"
@@ -339,7 +397,7 @@ if (FALSE) {
 merge_by_geoid <- function(x, y) {
   # Remove duplicate fields
   non_dup_fields <- c(cn(y)[!cn(y) %in% cn(x)], "GEOID")
-  merge(x, y %>% select(one_of(non_dup_fields)), by = "GEOID", all = TRUE)
+  merge(x, y %>% select(all_of(non_dup_fields)), by = "GEOID", all = TRUE)
 }
 # acs5_ccdf <-
 #   Reduce(merge_by_geoid,
