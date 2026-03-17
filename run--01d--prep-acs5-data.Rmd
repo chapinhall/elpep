@@ -263,6 +263,44 @@ acs5_healthins <-
 
 ```
 
+## Examine Maps of Selected ACS5 Measures
+
+```{r map building code}
+make_acs5_map <- function(my_dat, my_field, my_label) {
+  geo_data <- 
+    tractShp %>% 
+    merge(
+      my_dat %>% select(all_of(c("GEOID", my_field))),
+      by = c("GEOID")
+    )
+  
+  geo_data %>% 
+    ggplot() +
+    aes(
+      fill = get(my_field)
+    ) +
+    geom_sf() + 
+    scale_fill_continuous(
+      name = "",
+      label = percent
+    ) +
+    labs(
+      title = my_label
+    ) +
+    theme(
+      plot.title = element_text(hjust = 0.5)
+    ) +
+    theme_void()
+}
+
+make_acs5_map(acs5tract,      "incpov_r0to100_est", "% in Poverty")
+make_acs5_map(acs5tract,      "ed_lths", "% Less than HS Degree")
+make_acs5_map(acs5_vetstatus, "rVet",         "% Veterans")
+make_acs5_map(acs5_disab,     "rDisab",       "% Disabled")
+make_acs5_map(acs5_healthins, "rNoHealthIns", "% Without Health Insurance")
+
+```
+
 
 ## Build ACS5-based Estimate of Correlation Between Income and Work Status
 
