@@ -508,7 +508,7 @@ inspect_fields <- function(df, show_all_combos = FALSE) {
   cat_vars <- setdiff(colnames(df), c("variable", "GEOID", "estimate", "moe", "se", "table", "geography"))
   meta_table <- 
     df %>% 
-    select(one_of(cat_vars)) %>% 
+    select(all_of(cat_vars)) %>% 
     unique()
   
   if (show_all_combos) {
@@ -609,11 +609,11 @@ construct_fields <-
         # of civilian, rather than "All"
         if ("All" %in% df_numer[, v]) {
           # see this approach in this "programming with dplyr" article: https://dplyr.tidyverse.org/articles/programming.html
-          df_numer <- df_numer %>% filter(.data[[v]] == "All") %>% select(-one_of(v))
+          df_numer <- df_numer %>% filter(.data[[v]] == "All") %>% select(-any_of(v))
         }
         if ("All" %in% df_denom[, v]) {
           # see this approach in this "programming with dplyr" article: https://dplyr.tidyverse.org/articles/programming.html
-          df_denom <- df_denom %>% filter(.data[[v]] == "All") %>% select(-one_of(v))
+          df_denom <- df_denom %>% filter(.data[[v]] == "All") %>% select(-any_of(v))
         }
       }
     }
@@ -637,7 +637,7 @@ construct_fields <-
             by = c("GEOID", by_vars)) %>% 
       mutate(r = numer_n / denom_n,
              r_se = se_ratio(numer_n, denom_n, numer_se, denom_se)) %>% 
-      select(one_of("GEOID", by_vars, "numerator", "r", "r_se", "numer_n", "numer_se", "denom_n")) %>% 
+      select(all_of(c("GEOID", by_vars, "numerator", "r", "r_se", "numer_n", "numer_se", "denom_n"))) %>% 
       rename(se_r = r_se, 
              n = numer_n,
              se_n = numer_se,
