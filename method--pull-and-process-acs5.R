@@ -372,10 +372,41 @@ develop_meta <- function(table_meta, verbose = FALSE) {
   if (any(str_detect(my_concepts, "DISABILITY STATUS"))) { 
     table_meta <- 
       table_meta %>% 
-      mutate(disab_status = 
-               case_when(str_detect(label, "With a disability") ~ "Disab", 
-                         str_detect(label, "No disability")     ~ "NoDisab") %>% 
-               replace_na("All"))
+      mutate(
+        disab_status = 
+          case_when(
+            str_detect(str_to_lower(label), "with a disability") ~ "Disab", 
+            str_detect(str_to_lower(label), "no disability")     ~ "NoDisab") %>% 
+          replace_na("All"))
+  }
+  
+  # Recode Health Insurance Status ---------------------------------------------
+  if (any(str_detect(my_concepts, "HEALTH INSURANCE COVERAGE"))) { 
+    table_meta <- 
+      table_meta %>% 
+      mutate(
+        health_ins_cov = 
+          case_when(
+            str_detect(str_to_lower(label), "with health insurance coverage") ~ "HasHealthIns", 
+            str_detect(str_to_lower(label), "no health insurance coverage")   ~ "NoHealthIns") %>% 
+          replace_na("All"))
+  }
+  
+  # Recode Public and Private Health Insurance Status --------------------------
+  if (any(str_detect(my_concepts, "(PUBLIC|PRIVATE) HEALTH INSURANCE"))) { 
+    table_meta <- 
+      table_meta %>% 
+      mutate(
+        pub_health_ins = 
+          case_when(
+            str_detect(str_to_lower(label), "with public coverage") ~ "HasPublicIns", 
+            str_detect(str_to_lower(label), "no public coerage")    ~ "NoPublicIns") %>% 
+          replace_na("All"),
+        priv_health_ins = 
+          case_when(
+            str_detect(str_to_lower(label), "with private health") ~ "HasPrivIns", 
+            str_detect(str_to_lower(label), "no private health")   ~ "NoPrivIns") %>% 
+          replace_na("All"))
   }
   
   # Recode Birth History -------------------------------------------------------
@@ -439,6 +470,18 @@ develop_meta <- function(table_meta, verbose = FALSE) {
                          str_detect(label, "Adopted")    ~ "OwnChildAdopted",
                          str_detect(label, "Step")       ~ "OwnChildStep") %>% 
                replace_na("NotOwnChild"))
+  }
+  
+  # Recode Veteran status ------------------------------------------------------
+  if (any(str_detect(my_concepts, "VETERAN STATUS"))) { 
+    table_meta <- 
+      table_meta %>% 
+      mutate(
+        vet_status = 
+          case_when(
+            str_detect(label, "Nonveteran") ~ "NonVet",
+            str_detect(label, "Veteran")    ~ "Vet") %>% 
+          replace_na("All"))
   }
   
   ### Check for duplicates -----------------------------------------------------
