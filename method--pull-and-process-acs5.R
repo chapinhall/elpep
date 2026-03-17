@@ -52,13 +52,16 @@ pull_table <- function(table_name,
     if (FALSE) {
       my_meta <- 
         get_acs5_metadata(year) %>% 
-        filter(str_detect(name, table_name))
+        filter(str_detect(name, paste0(table_name, "_")))
     }
     
     table_pull <-
       merge(table_pull,
             my_meta %>% 
-              filter(str_detect(name, table_name)) %>% 
+              filter(str_detect(name, paste0(table_name, "_"))) %>% 
+                # Adding the "_" avoid multiple matches of a table name in case
+                # of race/ethnicity letters that follow the table name, e.g.
+                # B18101 and B18101[A-I]
               develop_meta() %>% 
               select(-label, -concept) %>% 
               rename(variable = name),
