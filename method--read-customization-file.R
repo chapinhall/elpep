@@ -86,10 +86,10 @@ base_year <- min(base_year, latest_pums_acs1_year)
 # Get the year of the latest ACS 5-year, and use that to set the pull
 
 get_latest_acs5_year <- function(start_from = as.integer(format(Sys.Date(), "%Y"))) {
-  years <- seq(start_from, 2010, by = -1)  # practical lower bound for acs5 "endyear"
-  for (y in years) {
+  yrs <- seq(start_from, 2010, by = -1)  # practical lower bound for acs5 "endyear"
+  for (y in yrs) {
     ok <- tryCatch({
-      df <- 
+      dat <- 
         get_acs(
           geography = "state", 
           variables = "B01003_001", # This is simply the total population, which is reported every year 
