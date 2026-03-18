@@ -241,7 +241,7 @@ acs5_disab <-
   construct_fields(
     df = acs5_disab_bySexAge_raw,
     numerator = "disab_status",
-    subset_cond = "age %in% c('Age18to34', 'Age35to64')",
+    subset_cond = "age %in% c('Age18to34')", # , 'Age35to64'
     subset_descr = "")
 
 
@@ -274,12 +274,21 @@ make_acs5_map <- function(my_dat, my_field, my_label) {
       by = c("GEOID")
     )
   
+  bbox <- sf::st_bbox(tractShp)
+  
   geo_data %>% 
     ggplot() +
-    aes(
-      fill = get(my_field)
+    geom_sf(
+      aes(
+        fill = get(my_field)
+      )
+    ) + 
+    geom_sf(
+      data = pumaShp,
+      color = "orange",
+      fill = NA,
+      linewidth = 1
     ) +
-    geom_sf() + 
     scale_fill_continuous(
       name = "",
       label = percent
@@ -290,11 +299,27 @@ make_acs5_map <- function(my_dat, my_field, my_label) {
     theme(
       plot.title = element_text(hjust = 0.5)
     ) +
-    theme_void()
+    theme_void() +
+    
+    coord_sf(
+      xlim = c(bbox["xmin"], bbox["xmax"]),
+      ylim = c(bbox["ymin"], bbox["ymax"]),
+      expand = FALSE
+    )
+
 }
 
-make_acs5_map(acs5tract,      "incpov_r0to100_est", "% in Poverty")
+make_acs5_map(acs5tract,      "incpov_r0to100_est",  "% in Poverty")
+make_acs5_map(acs5tract,      "incpov_r500plus_est", "% over 500% FPL")
+
 make_acs5_map(acs5tract,      "ed_lths", "% Less than HS Degree")
+make_acs5_map(acs5tract,      "ed_coll", "% College Educated")
+
+make_acs5_map(acs5tract,      "raceeth_wh_nonh_est",    "% White (non-Hispanic)")
+make_acs5_map(acs5tract,      "raceeth_bl_nonh_est",    "% Black (non-Hispanic)")
+make_acs5_map(acs5tract,      "raceeth_h_est",          "% Hispanic")
+make_acs5_map(acs5tract,      "raceeth_amind_nonh_est", "% American Indian")
+
 make_acs5_map(acs5_vetstatus, "rVet",         "% Veterans")
 make_acs5_map(acs5_disab,     "rDisab",       "% Disabled")
 make_acs5_map(acs5_healthins, "rNoHealthIns", "% Without Health Insurance")
