@@ -531,8 +531,8 @@ meta_renames_B17012_fam <-
   meta_sub %>%
   filter(grepl("B17012", group)) %>%
   separate(label, into=c("est", "count", "incpov", "family", "type", "kids"), sep = "!!") %>%
-  filter((str_detect(family, "Married") & str_detect(type, "children")) | 
-         (str_detect(family, "Other ")  & str_detect(kids, "children"))) %>%
+  filter((str_detect(family, "Married") & str_detect(type, "child")) | 
+         (str_detect(family, "Other ")  & str_detect(kids, "child"))) %>%
   mutate( 
     hhpov = case_when(grepl("Income in the past 12 months at or above poverty level", incpov) ~ "AtAbovePov",
                       grepl("Income in the past 12 months below poverty level", incpov)       ~ "BelowPov",

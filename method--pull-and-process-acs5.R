@@ -83,7 +83,7 @@ pull_table <- function(table_name,
 #------------------------------------------------------------------------------#
 
 check_meta <- function(year, table_name, survey = "acs5") {
-  load_variables(2021, "acs5") %>% 
+  load_variables(year, "acs5") %>% 
     filter(str_detect(name, table_name))
 }
 
@@ -95,7 +95,9 @@ develop_meta <- function(table_meta, verbose = FALSE) {
   
   table_meta <- 
     table_meta %>% 
-    mutate(table = str_replace(name, "(\\w\\d+)\\w?_.+", "\\1")) 
+    mutate(
+      table = str_replace(name, "(\\w\\d+)\\w?_.+", "\\1")
+    ) 
   
   if (n_distinct(table_meta$table) > 1) stop("Expected only a single census table")
   
@@ -234,6 +236,21 @@ develop_meta <- function(table_meta, verbose = FALSE) {
                replace_na("All"))
   }
   
+  # Recode Number of Related Children Under 18 Years ---------------------------
+  if (any(str_detect(my_concepts, "NUMBER OF RELATED CHILDREN UNDER 18 YEARS"))) {
+    #table_meta <- filter(my_meta, str_detect(name, "B17012"))
+    table_meta <- 
+      table_meta %>% 
+      mutate(
+        own_kids_under18 =
+          case_when(
+            str_detect(label, "No child")           ~ "NoKidsUnder18",
+            str_detect(label, "1 or 2 children")    ~ "1or2KidsUnder18",
+            str_detect(label, "3 or 4 children")    ~ "3or4KidsUnder18",
+            str_detect(label, "5 or more children") ~ "5plusKidsUnder18") %>% 
+          replace_na("All"))
+  }
+  
   # Recode Grandparent Presence ------------------------------------------------
   if (any(str_detect(my_concepts, "GRANDPARENTS LIVING WITH OWN GRANDCHILDREN"))) {
     #table_meta <- filter(my_meta, str_detect(name, "B10051"))
@@ -251,6 +268,22 @@ develop_meta <- function(table_meta, verbose = FALSE) {
                            str_detect(label, "Other grandparents")         ~ "OtherGPPresent" ) %>% 
                  replace_na("All"))
     }
+  }
+  
+  # Recode Household Type ------------------------------------------------------
+  if (any(str_detect(my_concepts, "HOUSEHOLD TYPE"))) {
+    #table_meta <- filter(my_meta, str_detect(name, "B17016"))
+    table_meta <-
+      table_meta %>% 
+      mutate(
+        family_type = 
+          case_when(
+            str_detect(label, "[Mm]arried-couple family")         ~ "Married",
+            str_detect(label, "[Ff]emale householder, no spouse") ~ "UnmarriedFemaleHh",
+            str_detect(label, "[Mm]ale householder, no spouse")   ~ "UnmarriedMaleHh",
+            str_detect(label, "[Oo]ther famil(y|ies)")            ~ "Unmarried") %>% 
+          replace_na("All")
+      )
   }
   
   # Recode Labor Force, Employment Status, and Family Type ---------------------
@@ -328,16 +361,30 @@ develop_meta <- function(table_meta, verbose = FALSE) {
   if (any(str_detect(my_concepts, "EDUCATIONAL ATTAINMENT"))) { 
     table_meta <- 
       table_meta %>% 
-      mutate(ed_attain = 
-               case_when(str_detect(label, "High school graduate") ~ "hs", 
-                         str_detect(label, "Less than (high|9th)|Not high school graduate") ~
-                           "lths", 
-                         str_detect(label, "Some college")         ~ "EdSomeColl", 
-                         str_detect(label, "Associate's")          ~ "EdAssoc",
-                         str_detect(label, "Bachelor's")           ~ "EdColl", 
-                         str_detect(label, "Graduate")             ~ "EdHsGrad",
-                         str_detect(label, "Less than 9th")        ~ "EdLtHs") %>% 
-               replace_na("All"))
+      mutate(
+        ed_attain = 
+          case_when(
+            str_detect(label, "No schooling")         ~ "EdLtHs", # "EdNoSch", 
+            str_detect(label, "Nursery to 4th")       ~ "EdLtHs", # "EdLt4th", 
+            str_detect(label, "5th and 6th")          ~ "EdLtHs", # "EdGr5or6", 
+            str_detect(label, "7th and 8th")          ~ "EdLtHs", # "EdGr7or8", 
+            str_detect(label, "9th grade")            ~ "EdLtHs", # "EdGr9", 
+            str_detect(label, "10th grade")           ~ "EdLtHs", # "EdGr10", 
+            str_detect(label, "11th grade")           ~ "EdLtHs", # "EdGr11", 
+            str_detect(label, "12th grade, no dipl")  ~ "EdLtHs", # "EdGr12NoDipl", 
+            str_detect(label, "High school graduate") ~ "EdHs", 
+            str_detect(label, "Less than (high|9th)|Not high school graduate") ~
+              "EdLtHs", 
+            str_detect(label, "Some college")         ~ "EdSomeColl", 
+            str_detect(label, "Associate's")          ~ "EdAssoc",
+            str_detect(label, "Bachelor's")           ~ "EdColl", 
+            str_detect(label, "Graduate")             ~ "EdGrad",
+            str_detect(label, "Master's")             ~ "EdGrad",
+            str_detect(label, "Professional")         ~ "EdGrad",
+            str_detect(label, "Doctorate")            ~ "EdGrad",
+            str_detect(label, "Less than 9th")        ~ "EdLtHs"
+          ) %>% 
+          replace_na("All"))
   }
   
   # Recode Means of Transportation ---------------------------------------------
