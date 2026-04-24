@@ -103,23 +103,30 @@ Although not currently used in this analysis, this codebase develops indicators 
 # Note: for households that contain multiple families, this method may produce inaccurate results (i.e., head of household may be unrelated to child in multi-family households).
 acs1_hoh <- 
   acs1 %>%
-  .[cRel == "Head"] %>%
-  .[, `:=`(hoh_educ = 
-             case_when(between(SCHL,  2, 15) ~ "less_hs", 
-                       between(SCHL, 16, 17) ~ "hs", 
-                       between(SCHL, 18, 20) ~ "somecoll", 
-                       between(SCHL, 21, 21) ~ "coll", 
-                       between(SCHL, 22, 24) ~ "collplus", 
-                       TRUE ~ "NA"), # Default value is NA
-           hoh_industry = bin_industry(INDP), # bin_industry() is defined in the `helper` script
-           hoh_race =
-             case_when(RAC2P == 1 ~ "white", 
-                       RAC2P == 2 ~ "black", 
-                       TRUE ~ "other_multiple"),
-           hoh_hispanic = 1*(HISP != 1))] %>% # Note: multiplication by 1 converts the TRUE/FALSE output to 1/0
-  .[j = hoh_industry_vulnerable := ifelse(hoh_industry == "NA", 
-                                          "NA", 
-                                          str_detect(hoh_industry, "educhealth|food"))] %>% # Note: the second argument to str_detect() uses regular expressions. For reference, see e.g. https://regexone.com/
+  filter(
+    cRel == "Head"
+  ) %>%
+  mutate(
+    hoh_educ = 
+      case_when(between(SCHL,  2, 15) ~ "less_hs", 
+                between(SCHL, 16, 17) ~ "hs", 
+                between(SCHL, 18, 20) ~ "somecoll", 
+                between(SCHL, 21, 21) ~ "coll", 
+                between(SCHL, 22, 24) ~ "collplus", 
+                TRUE ~ "NA"), # Default value is NA
+    hoh_industry = bin_industry(INDP), # bin_industry() is defined in the `helper` script
+    hoh_industry_vulnerable = 
+      ifelse(hoh_industry == "NA", 
+             "NA", 
+             str_detect(hoh_industry, "educhealth|food")
+               # Note: the second argument to str_detect() uses regular expressions. 
+               # For reference, see e.g. https://regexone.com/
+      ),
+    hoh_race =
+      case_when(RAC2P == 1 ~ "white", 
+                RAC2P == 2 ~ "black", 
+                TRUE ~ "other_multiple"),
+    hoh_hispanic = 1*(HISP != 1)) %>% # # Note: multiplication by 1 converts the TRUE/FALSE output to 1/0
   dplyr::select(YEAR, #SAMPLE, 
                 SERIALNO, hoh_educ, hoh_industry, hoh_industry_vulnerable, hoh_race, hoh_hispanic)
 ```
@@ -147,14 +154,19 @@ An additional set of indicators is built using all information about household m
 # SCH -- 0 - N/A (less than 3 yrs old), 1 - No, has not attended in the last 3 months, 2 - Yes, public school or public college, 3 - Yes, private school or college or home school
 
 acs1_hh <-
-  copy(acs1) %>% 
-  .[j = fam_size := .N,
-    by = .(YEAR, SERIALNO)] %>% 
-  .[i = cRel %in% c("Head", "Spouse"), # subset to only householder and spouse records
-    by = .(YEAR, SERIALNO, fam_size),
-    j = .(spouse_present = maxNA(cRel == "Spouse"),             # note: spouse_present is hh-level var
-          all_work_sch   = minNA(ESR %in% 1:2 | SCH %in% 2:3))] # corresponds to working, or in school
-
+  copy(acs1) %>%
+  mutate(
+    .by = c(YEAR, SERIALNO),
+    fam_size = n()
+  ) %>% 
+  filter(
+    cRel %in% c("Head", "Spouse") # subset to only householder and spouse records
+  ) %>% 
+  summarize(
+    .by = c(YEAR, SERIALNO, fam_size),
+    spouse_present = maxNA(cRel == "Spouse"),           # note: spouse_present is hh-level var
+    all_work_sch   = minNA(ESR %in% 1:2 | SCH %in% 2:3) # corresponds to working, or in school
+  )
   # /!\ Not built, but possibly of interest may be gender of households, and
   # separate examination of SCH and ESR
 ```
@@ -203,76 +215,86 @@ Besides the indicators above, all other relevant characteristics are measured re
   - 0-100% FPL, 100-200%, 200-300%, 300-400%, 400%+ (useful for simpler reference)
 * Combinations of partitions defined above to both represent share categories predicted in the SAE method, as well as direct calculation of CCDF eligibility rates in the baseline year
 
-```{r get fpl threshold for ccdf for ACS1 calcs}
+```{r get fpl threshold for prog for ACS1 calcs}
 # It's not strictly the case that this is provided directly by users, because a
 # custom income threshold such as based on state median income may have been 
 # provided
 
-ccdf_inc_thresh_fpl <- get_fpl_thresh_for_ccdf()
+prog_inc_thresh_fpl <- get_fpl_thresh_for_prog()
 ```
 
 
 ```{r prepare ACS 1-year microdata for children}
-acs1_child <- 
-  acs1[AGEP <= kid_age_thres_p+1] %>% 
-  merge(acs1_hoh, 
-        by = c("YEAR", "SERIALNO"), 
-        all.x = TRUE) %>%
-  merge(acs1_hh,
-        by = c("YEAR", "SERIALNO"),
-        all.x = TRUE) %>% 
-  .[, fam_incpov_ratio := POVPIP / 100] %>% 
-  .[, `:=`(child_agegroup = bin_age(AGEP),
-           child_race = 
-             case_when(RAC2P == 1 ~ "white",
-                       RAC2P == 2 ~ "black",
-                       TRUE ~ "other_multiple"),
-           child_hispanic = 1*(HISP != 1),
-           fam_incpov_ratio_cat_mix     = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = c(0, 0.50, 1.00, 2.00, 4.00)),
-           fam_incpov_ratio_cat_hs_ccdf = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = c(0, 1.00, ccdf_inc_thresh_fpl/100, 4.00)),
-           fam_incpov_ratio_cat_to185   = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = c(0, 0.50, 1.25, 1.85, 4.00)),
-           fam_incpov_ratio_cat_by50    = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = seq(0, 4, by = 0.5)),
-           fam_incpov_ratio_cat_by75    = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = c(0, 0.75, 1.50, 2.25, 4.00)),
-           fam_incpov_ratio_cat_by100   = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = seq(0, 4, by = 1.0)),
-           obs_weight = PWGTP)] %>% 
-  .[j = `:=`(work_spouse_status    = paste(ifelse(all_work_sch == 1, "WorkElig",      "NotWorkElig"),
-                                           ifelse(spouse_present == 1, "SpousePresent", "NoSpousePresent"),
-                                           sep = "_"),
-             work_incpov_status185 = paste(ifelse(all_work_sch == 1, "WorkElig", "NotWorkElig"),
-                                           fam_incpov_ratio_cat_to185,
-                                           sep = "_"),
-             work_incpov_status100 = paste(ifelse(all_work_sch == 1, "WorkElig", "NotWorkElig"),
-                                           fam_incpov_ratio_cat_by100,
-                                           sep = "_"),
-             work_incpov_status75  = paste(ifelse(all_work_sch == 1, "WorkElig", "NotWorkElig"),
-                                           fam_incpov_ratio_cat_by75,
-                                           sep = "_"),
-             work_incpov_statushs  = paste(ifelse(all_work_sch == 1, "WorkElig", "NotWorkElig"),
-                                           fam_incpov_ratio_cat_hs_ccdf,
-                                           sep = "_"))]
+acs1_elig <- 
+  acs1 %>% 
+  merge(
+    acs1_hoh, 
+    by = c("YEAR", "SERIALNO"), 
+    all.x = TRUE
+  ) %>%
+  merge(
+    acs1_hh,
+    by = c("YEAR", "SERIALNO"),
+    all.x = TRUE) %>% 
+  mutate(
+    fam_incpov_ratio = POVPIP / 100,
+    cAge = bin_age(AGEP),
+    cRace = 
+      case_when(RAC2P == 1 ~ "white",
+                RAC2P == 2 ~ "black",
+                TRUE ~ "other_multiple"),
+    bHisp = 1*(HISP != 1),
+    
+    fam_incpov_ratio_cat_mix     = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = c(0, 0.50, 1.00, 2.00, 4.00)),
+    fam_incpov_ratio_cat_hs_prog = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = c(0, 1.00, prog_inc_thresh_fpl/100, 4.00)),
+    fam_incpov_ratio_cat_to185   = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = c(0, 0.50, 1.25, 1.85, 4.00)),
+    fam_incpov_ratio_cat_by50    = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = seq(0, 4, by = 0.5)),
+    fam_incpov_ratio_cat_by75    = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = c(0, 0.75, 1.50, 2.25, 4.00)),
+    fam_incpov_ratio_cat_by100   = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = seq(0, 4, by = 1.0)),
+    
+    cWorkElig      = ifelse(  all_work_sch == 1, "WorkElig",      "NotWorkElig"),
+    cSpousePresent = ifelse(spouse_present == 1, "SpousePresent", "NoSpousePresent"),
+    
+    work_spouse_status    = paste_(cWorkElig, cSpousePresent),
+    work_incpov_status185 = paste_(cWorkElig, fam_incpov_ratio_cat_to185),
+    work_incpov_status100 = paste_(cWorkElig, fam_incpov_ratio_cat_by100),
+    work_incpov_status75  = paste_(cWorkElig, fam_incpov_ratio_cat_by75),
+    work_incpov_statushs  = paste_(cWorkElig, fam_incpov_ratio_cat_hs_prog),
+  
+    obs_weight = PWGTP
+  )
+  
 ```
 
 ```{r merge in the custom income thresholds if specified}
 if (exists("custom_income_thresh")) {
   # Check that all family sizes present in the data are represented in the custom
   # spec file
-  if (!maxNA(acs1_child$fam_size) %in% custom_income_thresh$fam_size) {
+  if (!maxNA(acs1_elig$fam_size) %in% custom_income_thresh$fam_size) {
     
-    warning(glue("The `custom_income_thresh` table does not contain all family ",
-                 "sizes present in the ACS 1-year microdata. It must reflect ",
-                 "family sizes up through {maxNA(acs1_child$fam_size)}.")) 
+    warning(
+      glue(
+        "The `custom_income_thresh` table does not contain all family ",
+        "sizes present in the ACS 1-year microdata. It must reflect ",
+        "family sizes up through {maxNA(acs1_elig$fam_size)}."
+      )
+    ) 
   }
   
-  acs1_child <- 
-    acs1_child %>% 
-    merge(custom_income_thresh,
-          by = "fam_size",
-          all.x = TRUE) %>% 
-    .[j = incratio_thresh := FINCP / inc_thresh]
+  acs1_elig <- 
+    acs1_elig %>% 
+    merge(
+      custom_income_thresh,
+      by = "fam_size",
+      all.x = TRUE) %>% 
+    mutate(
+      incratio_thresh = FINCP / inc_thresh  
+    )
+    
 }
 ```
 
-```{r generate ccdf eligibility flags}
+```{r generate prog eligibility flags}
 # Generate multiple flags of CCDF eligibility at the potentially-multiple
 # income-to-threshold ratios specified
 
@@ -281,16 +303,17 @@ if (exists("custom_income_thresh")) {
 
 # Determine which income ratio to use, based on whether custom values were specified
 if (exists("custom_income_thresh")) {
-  acs1_child[j = my_incratio := incratio_thresh]
+  acs1_elig <- acs1_elig %>% mutate(my_incratio = incratio_thresh)
 } else {
-  acs1_child[j = my_incratio := fam_incpov_ratio]
+  acs1_elig <- acs1_elig %>% mutate(my_incratio = fam_incpov_ratio)
 }
 
 # Generate one eligibility field for each cutpoint specified
-acs1_child <-
-  acs1_child %>% 
-  .[j = paste0("ccdf_elig_incratio_", local_ccdf_incratio_cuts) :=
-      lapply(local_ccdf_incratio_cuts, 
+acs1_elig <-
+  acs1_elig %>% 
+  as.data.table() %>% 
+  .[j = paste0("prog_elig_incratio_", local_prog_incratio_cuts) :=
+      lapply(local_prog_incratio_cuts, 
              function(x) {
                1*all_work_sch*(my_incratio <= x/100)
              })]
@@ -302,20 +325,33 @@ acs1_child <-
 # /!\ Note: this needs to be checked carefully for each given setting, because
 # the choices here may need to be adjusted based on the data
 partition_vars <- 
-  str_subset(cn(acs1_child), "fam_incpov.+cat|work_spouse|work_incpov")
+  str_subset(cn(acs1_elig), "fam_incpov.+cat|work_spouse|work_incpov")
 for (pv in partition_vars) {
   my_plot <- 
-    acs1_child %>% 
-    filter(between(AGEP, 0, 5)) %>% 
-    group_by_at(c(pv, "PUMA")) %>% 
-    summarize(n = n()) %>% 
-    ggplot(aes(x = n,
-               color = get(pv))) +
-    geom_density(linewidth = 1) +
-    geom_vline(xintercept = 10) +
-    scale_x_continuous(limits = c(0, 50)) +
-    labs(title = pv) +
-    theme(axis.text = element_text(angle = 90))
+    acs1_elig %>% 
+    summarize(
+      .by = c(pv, "PUMA"),
+      n = n()) %>% 
+    ggplot(
+      aes(
+        x = n,
+        color = get(pv))
+    ) +
+    geom_density(
+      linewidth = 1
+    ) +
+    geom_vline(
+      xintercept = 10
+    ) +
+    scale_x_continuous(
+      limits = c(0, 50)
+    ) +
+    labs(
+      title = pv
+    ) +
+    theme(
+      axis.text = element_text(angle = 90)
+    )
   print(ggplotly(my_plot, tooltip = "color"))
   #print(my_plot)
 }
@@ -335,37 +371,50 @@ for (pv in partition_vars) {
 # diagnostics produced in the `02a` script which compares the SAE estimates versus
 # ACS 1-year values at the PUMA level.
 
-acs1_child <- 
-  acs1_child %>% 
+acs1_elig <- 
+  acs1_elig %>% 
   mutate(
     work_incpov_mix = 
-           case_when(
-             str_detect(work_incpov_statushs,
-                        #glue("NotWorkElig_([^0%])")) ~ "NotWorkElig_100%_500%",
-                          # Note that this regular expression matches strings
-                          # that start with "NotWorkElig" and do *not* follow with 0%
-                          # in practice, this groups all larger cells
-                        glue("NotWorkElig_(0%|100%)")) ~ 
-                          glue("NotWorkElig_0%_{local_ccdf_incratio_base}%"),
-             str_detect(work_incpov_statushs,
-                        glue("NotWorkElig_[^(0%|100%)]")) ~
-                          glue("NotWorkElig_{local_ccdf_incratio_base}%+"),
-             TRUE ~ work_incpov_statushs))
+      case_when(
+        str_detect(
+          work_incpov_statushs,
+          #glue("NotWorkElig_([^0%])")) ~ "NotWorkElig_100%_500%",
+          # Note that this regular expression matches strings
+          # that start with "NotWorkElig" and do *not* follow with 0%
+          # in practice, this groups all larger cells
+          glue("NotWorkElig_(0%|100%)")
+        ) ~ 
+          glue("NotWorkElig_0%_{local_prog_incratio_base}%"),
+        str_detect(
+          work_incpov_statushs,
+          glue("NotWorkElig_[^(0%|100%)]")
+        ) ~
+          glue("NotWorkElig_{local_prog_incratio_base}%+"),
+        TRUE ~ work_incpov_statushs))
   # Note that we intentionally leave "WorkElig_0%_100%" as an often-smaller
   # cell because it represents an important single quantity of children in
-  # families that are simultaneously HS and CCDF eligible
+  # families that are simultaneously HS and prog eligible
 
 if (FALSE) {
   my_plot <- 
-    acs1_child %>% 
-    filter(between(AGEP, 0, 5)) %>% 
-    group_by(work_incpov_mix, PUMA) %>% 
-    summarize(n = n()) %>% 
-    ggplot(aes(x = n,
-               color = work_incpov_mix)) +
+    acs1_elig %>% 
+    summarize(
+      .by = c(work_incpov_mix, PUMA),
+      n = n()
+    ) %>% 
+    ggplot(
+      aes(
+        x = n,
+        color = work_incpov_mix
+      )
+    ) +
     geom_density() +
-    geom_vline(xintercept = 10) +
-    scale_x_continuous(limits = c(0, 50))
+    geom_vline(
+      xintercept = 10
+    ) +
+    scale_x_continuous(
+      limits = c(0, 50)
+    )
     
   print(ggplotly(my_plot, tooltip = "color"))
 }
@@ -374,93 +423,136 @@ if (FALSE) {
 
 ```{r check puma-level patterns in various eligibility status}
 elig_stats_puma <- 
-  acs1_child %>% 
-  filter(between(AGEP, 0, 5)) %>% 
-  mutate(ccdf_inc_elig = fam_incpov_ratio_cat_hs_ccdf %in% 
-                           c("0%-100%", glue("100%-{local_ccdf_incratio_base}%")),
-         ccdf_elig     = str_detect(work_incpov_statushs, "^WorkElig_(0%|100%)")) %>% 
-  group_by(PUMA) %>% 
+  acs1_elig %>% 
+  mutate(
+    prog_inc_elig = 
+      fam_incpov_ratio_cat_hs_prog %in% 
+        c("0%-100%", glue("100%-{local_prog_incratio_base}%")),
+    prog_elig     = str_detect(work_incpov_statushs, "^WorkElig_(0%|100%)")) %>% 
   summarize(
+    .by = PUMA,
     pct_le50_elig   = meanNA(fam_incpov_ratio_cat_mix == "0%-50%"),
     pct_le100_elig  = meanNA(fam_incpov_ratio_cat_by100 == "0%-100%"),
-    pct_leCcdf_elig = meanNA(ccdf_inc_elig),
-    pct_ccdf_elig   = meanNA(ccdf_elig),
-    pct_work_elig_if_incLe225 = meanNA(all_work_sch[ccdf_inc_elig]))
+    pct_leProg_elig = meanNA(prog_inc_elig),
+    pct_prog_elig   = meanNA(prog_elig),
+    pct_work_elig_if_incLe225 = meanNA(all_work_sch[prog_inc_elig])
+  )
 ```
 
 ```{r}
-ggplot(elig_stats_puma,
-       aes(x = pct_le100_elig,
-           y = pct_ccdf_elig)) +
+ggplot(
+  elig_stats_puma,
+  aes(
+    x = pct_le100_elig,
+    y = pct_prog_elig
+  )
+) +
   geom_point() + 
-  scale_x_continuous(labels = percent) +
-  scale_y_continuous(labels = percent) +
-  labs(title = glue("Comparison of PUMA-level Poverty and {local_ccdf_name_short} Eligibility"),
-       subtitle = glue("Given the {local_ccdf_name_short} work requirement, the relative stability of this relationship may be surprising,\n",
-                       "since labor force attachment may be expected to be lower, on average, in higher poverty\n",
-                       "communities"),
-       x = "Poverty Rate",
-       y = glue("Rate of {local_ccdf_name_short} Eligibility")) +
+  scale_x_continuous(
+    labels = percent
+  ) +
+  scale_y_continuous(
+    labels = percent
+  ) +
+  labs(
+    title = glue("Comparison of PUMA-level Poverty and {local_prog_name_short} Eligibility"),
+    subtitle = glue("Given the {local_prog_name_short} work requirement, the relative stability of this relationship may be surprising,\n",
+                    "since labor force attachment may be expected to be lower, on average, in higher poverty\n",
+                    "communities"),
+    x = "Poverty Rate",
+    y = glue("Rate of {local_prog_name_short} Eligibility")
+  ) +
   theme_minimal()
 ```
 
 
 ```{r examine puma-level correspondence between income eligibility and work eligibility}
-ggplot(elig_stats_puma,
-       aes(x = pct_leCcdf_elig, 
-           y = pct_work_elig_if_incLe225
-           #,color = age
-           )) +
+ggplot(
+  elig_stats_puma,
+  aes(
+    x = pct_leProg_elig, 
+    y = pct_work_elig_if_incLe225
+    #,color = age
+  )
+) +
   geom_point() + 
   geom_abline() +
   geom_smooth() + 
-  scale_x_continuous(labels = percent,
-                     limits = c(0, NA)) +
-  scale_y_continuous(labels = percent,
-                     limits = c(0, NA)) +
+  scale_x_continuous(
+    labels = percent,
+    limits = c(0, NA)
+  ) +
+  scale_y_continuous(
+    labels = percent,
+    limits = c(0, NA)
+  ) +
   #coord_fixed() +
-  labs(title = glue("PUMA-level Work vs Income-Eligibility for {local_ccdf_name_short} for Families of Children 0-5"),
-       # /*\ Note: check that the pattern and thus interpretation holds
-       subtitle = glue("The negative relationship leads to a stable overall {local_ccdf_name_short} eligiblity rate as PUMAs with lower\n",
-                       "incomes and lower labor market participation can end up with eligibility rates similar to PUMAs\n",
-                       "with relatively higher income and higher labor market participation"),
-       x = glue("Income Eligibility Rate"),
-       y = glue("% Work Eligibility Rate")) +
+  labs(
+    title = glue("PUMA-level Work vs Income-Eligibility for {local_prog_name_short} for Families of Children 0-5"),
+    # /*\ Note: check that the pattern and thus interpretation holds
+    subtitle = glue("The negative relationship leads to a stable overall {local_prog_name_short} eligiblity rate as PUMAs with lower\n",
+                    "incomes and lower labor market participation can end up with eligibility rates similar to PUMAs\n",
+                    "with relatively higher income and higher labor market participation"),
+    x = glue("Income Eligibility Rate"),
+    y = glue("% Work Eligibility Rate")
+  ) +
   theme_minimal()
 ```
 
 ```{r examine layers of eligibility}
 elig_stats_puma_stack <-
   elig_stats_puma %>% 
-  mutate(pct_ccdf_only     = pct_ccdf_elig,
-         pct_le225_nonccdf = pct_leCcdf_elig - pct_ccdf_elig) %>% 
-  pivot_longer(cols = -c(PUMA))
+  mutate(
+    pct_prog_only     = pct_prog_elig,
+    pct_le225_nonprog = pct_leProg_elig - pct_prog_elig
+  ) %>% 
+  pivot_longer(
+    cols = -c(PUMA)
+  )
 
 elig_stats_puma_stack %>% 
-  filter(name %like% "pct_ccdf_elig|pct_leCcdf_elig|pct_work_elig_if") %>%
-  group_by(PUMA) %>% 
-  mutate(ccdf_val = value[name == "pct_ccdf_elig"]) %>%  # pct_work_elig_if_le225
-  ungroup() %>% 
-  arrange(ccdf_val) %>% 
-  mutate(PUMA_order = match(PUMA, unique(PUMA))) %>% 
-  ggplot(aes(x = PUMA_order,
-             y = value,
-             color = name)) +
+  filter(
+    name %like% "pct_prog_elig|pct_leProg_elig|pct_work_elig_if"
+  ) %>%
+  mutate(
+    .by = PUMA,
+    prog_val = value[name == "pct_prog_elig"]
+  ) %>%  # pct_work_elig_if_le225
+  arrange(prog_val) %>% 
+  mutate(
+    PUMA_order = match(PUMA, unique(PUMA))
+  ) %>% 
+  ggplot(
+    aes(
+      x = PUMA_order,
+      y = value,
+      color = name)
+  ) +
   #geom_line() + 
-  geom_point(size = 2) + 
-  geom_smooth(se = FALSE) + 
-  scale_y_continuous(labels = percent) + 
-  labs(title = glue("PUMA-level Rates of {local_ccdf_name_short} Eligibility, With Work and Income Eligibility"),
-       subtitle = glue("{local_ccdf_name_short} eligibility can often be composed of countervailing income and work eligibility"),
-       x = glue("PUMAs sorted by % {local_ccdf_name_short} eligibility")) + 
+  geom_point(
+    size = 2
+  ) + 
+  geom_smooth(
+    se = FALSE
+  ) + 
+  scale_y_continuous(
+    labels = percent
+  ) + 
+  labs(
+    title = glue("PUMA-level Rates of {local_prog_name_short} Eligibility, With Work and Income Eligibility"),
+    subtitle = glue("{local_prog_name_short} eligibility can often be composed of countervailing income and work eligibility"),
+    x = glue("PUMAs sorted by % {local_prog_name_short} eligibility")
+  ) + 
   theme_minimal()
 ```
 
 
 ```{r verify that data sets only have one obs per child, eval = developer_mode}
-acs1_child %>% 
-  group_by("SERIALNO", "SPORDER") %>% 
-  summarize(count = n()) %>% 
+acs1_elig %>% 
+  summarize(
+    .by = c(SERIALNO, SPORDER),
+    count = n()
+  ) %>% 
   group_by(count) %>% 
   tally() 
 ```
@@ -476,17 +568,21 @@ gc()
 # with by-hand pulls of ACS data from ipums.org. If of interest outside of the original
 # IL-based application, the income threshold may need modification.
 (puma_agg <- 
-   acs1_child %>% 
-   filter(between(AGEP, 0, 5)) %>% 
-   group_by(PUMA) %>% 
-   mutate(faminc_lt_thresh = fam_incpov_ratio <= local_ccdf_incratio_base/100,
-          workelig = all_work_sch == 1) %>% 
-   summarize(sample_n = n(),
-             n = sum(PWGTP),
-             n_ltCcdfThresh         =   comma(sum(PWGTP[])),
-             pct_ltCcdfInc          = percent(sum(PWGTP[faminc_lt_thresh]) / sum(PWGTP), accuracy = 0.01),
-             n_ltCcdfInc_workElig   =   comma(sum(PWGTP[faminc_lt_thresh & workelig])),
-             pct_ltCcdfInc_workElig = percent(sum(PWGTP[faminc_lt_thresh & workelig]) / sum(PWGTP), accuracy = 0.01)) %>% 
+   acs1_elig %>% 
+   mutate(
+     .by = PUMA,
+     faminc_lt_thresh = fam_incpov_ratio <= local_prog_incratio_base/100,
+     workelig = all_work_sch == 1
+   ) %>% 
+   summarize(
+     .by = PUMA,
+     sample_n = n(),
+     n = sum(PWGTP),
+     n_ltProgThresh         =   comma(sum(PWGTP[])),
+     pct_ltProgInc          = percent(sum(PWGTP[faminc_lt_thresh]) / sum(PWGTP), accuracy = 0.01),
+     n_ltProgInc_workElig   =   comma(sum(PWGTP[faminc_lt_thresh & workelig])),
+     pct_ltProgInc_workElig = percent(sum(PWGTP[faminc_lt_thresh & workelig]) / sum(PWGTP), accuracy = 0.01)
+   ) %>% 
    arrange(PUMA))
 
 if (FALSE) {
@@ -496,41 +592,48 @@ if (FALSE) {
 
 ```{r calculate selected statistics at the PUMA level with standard errors to facilitate later checks}
 # Function to calculate poverty rates
-acs1_child <- 
-  acs1_child %>% 
-  mutate(child_agegroup_combo = 
-           case_when(child_agegroup %in% c("0to2", "3to5") ~ "0to5",
-                     TRUE ~ as.character(child_agegroup)) %>% 
-           factor(levels = c(setdiff(levels(child_agegroup), 
-                                     c("0to2", "3to5")),
-                             "0to5")) %>% 
-           fct_relevel("0to5")) %>% 
-  arrange(child_agegroup_combo, PUMA)
+acs1_elig <- 
+  acs1_elig %>% 
+  mutate(
+    cAgegroup_combo = 
+      case_when(
+        cAgegroup %in% c("0to2", "3to5") ~ "0to5",
+        TRUE ~ as.character(cAgegroup)
+      ) %>% 
+      factor(
+        levels = 
+          c(setdiff(levels(cAgegroup), 
+                    c("0to2", "3to5")),
+            "0to5")
+      ) %>% 
+      fct_relevel("0to5")) %>% 
+  arrange(cAgegroup_combo, PUMA)
 
 calc_acs1_puma_pov <- function(my_data, indices) {
   # Perform stratified bootstrap sampling of the data, with age and PUMA
   my_data_boot <- 
     my_data[j = .SD[sample(.N, .N, replace = TRUE)],
-            by = .(child_agegroup_combo, PUMA)]
+            by = .(cAgegroup_combo, PUMA)]
   
   my_data_boot[j = .(pct_pov = sum(PWGTP[fam_incpov_ratio <= 1.00]) / sum(PWGTP)),
-               by = .(child_agegroup_combo, PUMA)] %>% 
-    .[order(child_agegroup_combo, PUMA)] %>% 
+               by = .(cAgegroup_combo, PUMA)] %>% 
+    .[order(cAgegroup_combo, PUMA)] %>% 
     pull(pct_pov)
 }
 
-acs1_boot <- boot::boot(acs1_child, calc_acs1_puma_pov, R = 200)
+acs1_boot <- boot::boot(acs1_elig, calc_acs1_puma_pov, R = 200)
 acs1_puma_stats <- 
-  cbind(acs1_boot$data[j = .(child_agegroup_combo, PUMA)] %>% unique(),
-        data.table(pct_pov       = acs1_boot$t0,
-                   pct_pov_check = apply(acs1_boot$t, 2, mean)),
-                   pct_pov_se    = sqrt(apply(acs1_boot$t, 2, var)))
+  cbind(
+    acs1_boot$data[j = .(cAgegroup_combo, PUMA)] %>% unique(),
+    data.table(pct_pov       = acs1_boot$t0,
+               pct_pov_check = apply(acs1_boot$t, 2, mean)),
+    pct_pov_se    = sqrt(apply(acs1_boot$t, 2, var)))
 ```
 
 
 
 ```{r}
-save(acs1_child,
+save(acs1_elig,
      acs1_puma_stats,
      file = glue("{output_path}acs1_data_{my_output_tag}.Rda"))
 ```
