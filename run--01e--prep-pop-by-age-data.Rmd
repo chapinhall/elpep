@@ -25,6 +25,183 @@ options(scipen=999)
 
 ```
 
+
+
+# Hard Calibration Method for Population Estimation -- ACS5 and ACS1
+
+This code develops counts of individuals by age, by tract as of the year of the most recent ACS 1-year release. It does this by taking age-by-tract counts from the most recent ACS5 release, which of course represents many years, and calibrates the totals to match the corresponding PUMA. This is a "hard" calibration in the sense that we ask the across-tract totals to match the PUMA sum exactly, even though each construct is measured with noise (which should be considered in a more balanced, "soft" calibration approach).
+
+```{r}
+# Load prepped data
+for (f in c("acs1", "acs5", "pop", "geo")) {
+  load(file = glue("{output_path}{f}_data_{my_output_tag}.Rda"))
+}
+```
+
+
+```{r select acs5 age counts}
+age5_t <- 
+  acs5tract %>% 
+  select(
+    matches("GEOID|age.+count")
+  )
+```
+
+```{r merge PUMA into tract-level data}
+
+age5_pt <- 
+  merge(
+    age5_t,
+    geo_crosswalk %>% select(GEOID, PUMA) %>% unique(),
+    by = "GEOID"
+  )
+
+stopifnot(nrow(age5_t) == nrow(age5_pt))
+```
+
+
+```{r function to build acs1 counts within age range}
+get_puma_totals <- function(bounds) {
+  
+  stopifnot(all(bounds %in% acs1_child$AGEP))
+  acs1_child %>% 
+    filter(
+      between(AGEP, bounds[1], bounds[2])
+    ) %>% 
+    summarize(
+      .by = PUMA,
+      n_p_to = sum(PWGTP))
+}
+
+stopifnot(
+  get_puma_totals(c(0, 5)) %>% 
+    filter(PUMA == acs1_child$PUMA[1]) %>% 
+    pull(n_p_to) == 
+    acs1_child %>% 
+    filter(
+      0 <= AGEP, 
+      AGEP <= 5
+    ) %>% 
+    summarize(
+      .by = PUMA,
+      n_p_to = sum(PWGTP)
+    ) %>% 
+    filter(
+      PUMA == acs1_child$PUMA[1]
+    ) %>% 
+    pull(n_p_to)
+)
+```
+
+```{r function to get ages from variable name}
+get_age_bounds <- function(age_var) {
+  if (str_detect(age_var, "\\dto\\d")) {
+    bounds <-
+      str_extract_all(
+        age_var, 
+        "\\d+"
+      ) %>% 
+      unlist() %>% 
+      as.numeric()
+  } else if (str_detect(age_var, "lt\\d")) {
+    ub <- 
+      str_extract(
+        age_var, 
+        "\\d+"
+      ) %>% 
+      as.numeric()
+    bounds <- c(0, ub - 1)
+  }
+  return(bounds)
+}
+
+stopifnot(get_age_bounds("age_6to8_count") == c(6, 8))
+stopifnot(get_age_bounds("age_lt3_count")  == c(0, 2))
+```
+
+
+```{r function to calibrate}
+
+calibrate_counts <- function(age_var) {
+  
+  my_bounds <- get_age_bounds(age_var)
+  age_counts_p <- get_puma_totals(my_bounds)
+  
+  ages5_pt %>% 
+    mutate(
+      .by = PUMA,
+      n_p_from = sum(get(age_var))
+    ) %>% 
+    merge(
+      age_counts_p,
+      by = "PUMA"
+    ) %>% 
+    mutate(
+      calib_mult = n_p_to / n_p_from,
+      calib = get(age_var) * calib_mult
+    )
+}
+
+# Sanity checks
+if (FALSE) {
+  x <- calibrate_counts("age_0to5_count")
+  x %>% select(PUMA, calib_mult) %>% unique() %>% pull(calib_mult) %>% hist()
+  x %>% 
+    filter(
+      PUMA %in% unique(PUMA)[1:5]
+    ) %>% 
+    ggplot() +
+    aes(
+      x = age_0to5_count,
+      y = calib
+    ) + 
+    geom_point() + 
+    geom_abline() +
+    facet_wrap(
+      ~PUMA
+    )
+}
+
+```
+
+
+```{r}
+batch_calibrations <- function(age_vars) {
+  calibs <- 
+    lapply(
+      age_vars,
+      \(a) {
+        calibrate_counts(a) %>% 
+          select(GEOID, calib) %>% 
+          mutate(age_var = a)
+      }
+    )
+  bind_rows(calibs)
+}
+
+pop_age_t_calib <- 
+  batch_calibrations(
+    c(
+      "age_lt3_count",
+      "age_3to5_count",
+      "age_6to12_count"
+      # "age_12to14_count",
+      # "age_15to17_count"
+    )
+  )
+```
+
+
+
+
+
+
+
+
+
+
+
+
 ```{r identify relevant fips codes for population pulls}
 my_state_fip <- 
   fips_codes %>% 
