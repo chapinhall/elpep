@@ -36,12 +36,11 @@ if (print_documentation) {
 }
 ```
 
-Current Population Survey (CPS) microdata are manually downloaded from the [IPUMS CPS](https://cps.ipums.org/cps/) site from `r base_year` through the most recent available month, and 
-
+Current Population Survey (CPS) microdata are manually downloaded from the [IPUMS CPS](https://cps.ipums.org/cps/) site from `r base_year` through the most recent available month.
 
 The sample is restricted to families of head of householders. This is practically driven by the availability of family income as available only for those individuals who are related to the head of household.
 
-Hawaii and Alaska are dropped, as they follow different federal poverty guidelines than other states, and are expected to have clearly distinct economic dynamics.
+Hawaii and Alaska are dropped, as they follow different federal poverty guidelines than other states, and are expected to have distinct economic dynamics.
 
 <!-- Note that subsetting to match households with both pre and post measures only occurs later, at the point that the method calculates transition ratios. We perform this match--and implicit subsetting--at that stage because a range of choices is may be reasonable and we save the application of discretion for that later stage. -->
 
@@ -72,27 +71,33 @@ gc()
 ```{r develop CPS timing flags}
 cps_timing <-
   cps_sub %>%
-  .[j = `:=`(baseline_year  = as.numeric(substr(as.character(CPSID), 1, 4)), 
-             baseline_month = as.numeric(substr(as.character(CPSID), 5, 6)))] %>%
-  .[j = `:=`(months_since_base = (YEAR - baseline_year)*12 + (MONTH - baseline_month))]
-cps_timing[j = table(months_since_base)] # Values should be 0-3, 12-15 (CPS samples are interviewed for 4 consecutive months, not interviewed for the next 8 months, and then interviewed again for the next 4 months). There are some cases of 9-11 for months_since_base, but small enough to ignore. 
+  mutate(
+    baseline_year  = as.numeric(substr(as.character(CPSID), 1, 4)), 
+    baseline_month = as.numeric(substr(as.character(CPSID), 5, 6)),
+    months_since_base = (YEAR - baseline_year)*12 + (MONTH - baseline_month))
+  
+table(cps_timing$months_since_base) # Values should be 0-3, 12-15 (CPS samples are interviewed for 4 consecutive months, not interviewed for the next 8 months, and then interviewed again for the next 4 months). There are some cases of 9-11 for months_since_base, but small enough to ignore. 
 
-cps_timing[j = `:=`(is_baseline = months_since_base == 0,
-                    # /!\ This selects a single post-period survey. Notably, it's the first time in which
-                    # the household has been seen. That will standardize samples with respect to calendar
-                    # time, but not with respect to time since initial survey. Return to consider whether
-                    # this is okay, if we want to standardized by e.g. months_since_base == 12 or 15, or
-                    # if we want the baseline to be max(months_since_base) - 12.
-                    is_post     = months_since_base == max(months_since_base) & months_since_base >= 12,
-                    YEAR_MONTH  = paste(YEAR, str_pad(MONTH, side = "left", width = 2, pad = "0"), sep = "-"),
-                    # build an indicator for whether the data are around great 
-                    # recession -- surrounding 2007-2009 -- vs COVID, surrounding
-                    # 2019 and after
-                    is_validation = YEAR < 2015),
-           by = CPSID]
+cps_timing <- 
+  cps_timing %>% 
+  mutate(
+    .by = CPSID,
+    
+    is_baseline = months_since_base == 0,
+    # /!\ This selects a single post-period survey. Notably, it's the first time in which
+    # the household has been seen. That will standardize samples with respect to calendar
+    # time, but not with respect to time since initial survey. Return to consider whether
+    # this is okay, if we want to standardized by e.g. months_since_base == 12 or 15, or
+    # if we want the baseline to be max(months_since_base) - 12.
+    is_post     = months_since_base == max(months_since_base) & months_since_base >= 12,
+    YEAR_MONTH  = paste(YEAR, str_pad(MONTH, side = "left", width = 2, pad = "0"), sep = "-")
+  )
 
 cps_timing_sub <- 
-  cps_timing[is_baseline == TRUE | is_post == TRUE] #subset to baseline or post data only
+  cps_timing %>% 
+  filter(
+    is_baseline == TRUE | is_post == TRUE
+  ) #subset to baseline or post data only
 
 rm(cps_sub)
 gc()
@@ -100,28 +105,47 @@ gc()
 
 ```{r examine how many cases have--or lack--baseline income data, eval = developer_mode}
 # Examine which, and how many, household do not have baseline data.
-cps_timing_sub[j = .(has_baseline = max(is_baseline),
-                     has_month0   = max(months_since_base == 0)),
-               by = CPSID] %>% 
-  .[j = .(pct_has_baseline = mean(has_baseline),
-          pct_has_month0   = mean(has_month0)),
-    by = .(YEAR_MONTH = substr(as.character(CPSID), 1, 6))] %>% 
-  .[order(YEAR_MONTH)] %>% 
-  pivot_longer(cols = -YEAR_MONTH) %>%
-  ggplot(aes(x = YEAR_MONTH,
-             y = value,
-             color = name,
-             label = YEAR_MONTH)) +
+cps_timing_sub %>% 
+  summarize(
+    .by = CPSID,
+    has_baseline = max(is_baseline),
+    has_month0   = max(months_since_base == 0)) %>% 
+  mutate(
+    YEAR_MONTH = substr(as.character(CPSID), 1, 6)
+  ) %>% 
+  summarize(
+    .by = YEAR_MONTH,
+    pct_has_baseline = mean(has_baseline),
+          pct_has_month0   = mean(has_month0)
+  ) %>% 
+  arrange(YEAR_MONTH) %>% 
+  pivot_longer(
+    cols = -YEAR_MONTH
+  ) %>%
+  ggplot(
+    aes(
+      x = YEAR_MONTH,
+      y = value,
+      color = name,
+      label = YEAR_MONTH)
+  ) +
   geom_point() +
-  geom_text(hjust = 1.1,
-            angle = 90,
-            color = "black",
-            alpha = 0.8,
-            size = 2) +
+  geom_text(
+    hjust = 1.1,
+    angle = 90,
+    color = "black",
+    alpha = 0.8,
+    size = 2
+  ) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90, 
-                                   size = 6),
-        legend.position = "bottom")
+  theme(
+    axis.text.x = 
+      element_text(
+        angle = 90, 
+        size = 6
+      ),
+    legend.position = "bottom"
+  )
 
 ```
 
@@ -167,41 +191,59 @@ cps_timing_sub[MARST == 3, table(RELATE)]
 ## Source: (https://www.irs.gov/pub/irs-soi/20in13ms.xls)
 cps_family <- 
   cps_timing_sub %>% 
-  .[j = `:=`(fam_size = .N, 
-             fam_wgt = sum(WTFINL),
-             has_schage_kid_base_flag = 1*(between(AGE, 6, 17)) %>% max(),
-             n_own_kids = sum(1*RELATE %in% c(301, 303)),                           # 301 - child of head of household, 303 is step-child
-             n_kids_le16 = sum(AGE <= 16),                                          # this counts number of kids living in the household regardless of relationship to the head
-             n_kids_le13 = sum(AGE <= 13),
-             n_kids_le5  = sum(AGE <=  5),
-             n_kids_0to2 = sum(between(AGE, 0, 2)),
-             n_kids_3to5 = sum(between(AGE, 3, 5)),
-             n_own_kids_le5  = sum(AGE <=  5 & RELATE %in% c(301, 303)),
-             n_own_kids_le16 = sum(AGE <= 16 & RELATE %in% c(301, 303)),
-             n_qual_kids = sum((AGE < 19 & RELATE %in% c(301, 303)) | (between(AGE, 19, 23) & RELATE %in% c(301, 303) & SCHLCOLL %in% c(1,3))), # this is number of qualifying kids
-             spouse_present = max(RELATE %in% 201:203)),
-             by = .(YEAR, MONTH, YEAR_MONTH, CPSID)] %>% 
-  .[j = `:=`(single_filer_flag = RELATE == 101 & MARST %in% 2:6 & n_qual_kids == 0, # this is head who is unmarried (single, separated, divorced or widowed) with no qualifying kids
-             joint_filer_flag  = RELATE == 101 & MARST == 1,                        # assumed MFJ if married, not considering the case of married, living separately and filing MFS
-             hoh_filer_flag    = RELATE == 101 & MARST %in% 2:6 & n_qual_kids > 0), # this is head who is unmarried (single, separated, divorced or widowed) with qualifying kids
-    by = .(YEAR, MONTH, YEAR_MONTH, CPSID)] %>% 
-  .[j = `:=`(has_schage_kid_base = factor(has_schage_kid_base_flag,
-                                          levels = 0:1, 
-                                          labels = c("No Sch-Age Kid, Base",
-                                                     "Has Sch-Age Kid, Base")),
-             has_young_kids_base = factor(1*(n_kids_le5 > 0),
-                                          levels = 0:1,
-                                          labels = c("No Young Kids, Base",
-                                                     "1+ Young Kids, Base")))] %>% 
-  .[j = `:=`(single_filer_flag = max(single_filer_flag),
-             joint_filer_flag = max( joint_filer_flag),
-             hoh_filer_flag = max(   hoh_filer_flag)),
-    by = .(YEAR, MONTH, YEAR_MONTH, CPSID)] %>%
-  .[j = filing_status := 
-      case_when(single_filer_flag == 1 ~ "single", 
-                joint_filer_flag == 1 ~ "joint",  
-                hoh_filer_flag == 1 ~ "hoh", 
-                TRUE ~ "other")]
+  summarize(
+    .by = c(YEAR, MONTH, YEAR_MONTH, CPSID),
+    fam_size = n(), 
+    fam_wgt = sum(WTFINL),
+    
+    has_schage_kid_base_flag = 1*(between(AGE, 6, 17)) %>% max(),
+    n_own_kids = sum(1*RELATE %in% c(301, 303)), # 301 - child of head of household, 303 is step-child
+    n_kids_le16 = sum(AGE <= 16),                # this counts number of kids living in the household regardless of relationship to the head
+    n_kids_le13 = sum(AGE <= 13),
+    n_kids_le5  = sum(AGE <=  5),
+    n_kids_0to2 = sum(between(AGE, 0, 2)),
+    n_kids_3to5 = sum(between(AGE, 3, 5)),
+    n_own_kids_le5  = sum(AGE <=  5 & RELATE %in% c(301, 303)),
+    n_own_kids_le16 = sum(AGE <= 16 & RELATE %in% c(301, 303)),
+    n_qual_kids = sum((AGE < 19 & RELATE %in% c(301, 303)) | (between(AGE, 19, 23) & RELATE %in% c(301, 303) & SCHLCOLL %in% c(1,3))), # this is number of qualifying kids
+    spouse_present = max(RELATE %in% 201:203)) %>% 
+  summarize(
+    .by = c(YEAR, MONTH, YEAR_MONTH, CPSID),
+    
+    single_filer_flag = RELATE == 101 & MARST %in% 2:6 & n_qual_kids == 0, 
+      # this is head who is unmarried (single, separated, divorced or widowed) with no qualifying kids
+    joint_filer_flag  = RELATE == 101 & MARST == 1,                        
+      # assumed MFJ if married, not considering the case of married, living separately and filing MFS
+    hoh_filer_flag    = RELATE == 101 & MARST %in% 2:6 & n_qual_kids > 0
+      # this is head who is unmarried (single, separated, divorced or widowed) with qualifying kids %>% 
+  ) %>% 
+  mutate(
+    has_schage_kid_base = 
+      factor(
+        has_schage_kid_base_flag,
+        levels = 0:1, 
+        labels = c("No Sch-Age Kid, Base", "Has Sch-Age Kid, Base")),
+    has_young_kids_base = 
+      factor(
+        1*(n_kids_le5 > 0),
+        levels = 0:1,
+        labels = c("No Young Kids, Base", "1+ Young Kids, Base")
+      )
+    ) %>% 
+  mutate(
+    .by = c(YEAR, MONTH, YEAR_MONTH, CPSID),
+    single_filer_flag = max(single_filer_flag),
+    joint_filer_flag  = max( joint_filer_flag),
+    hoh_filer_flag    = max(   hoh_filer_flag),
+    
+    filing_status = 
+      case_when(
+        single_filer_flag == 1 ~ "single", 
+        joint_filer_flag == 1 ~ "joint",  
+        hoh_filer_flag == 1 ~ "hoh", 
+        TRUE ~ "other"
+      )
+  )
 
 ```
 
@@ -211,8 +253,10 @@ cps_family <-
 # Confirm number of head for each household (should be one)
 cps_family_test <- 
   cps_family %>%
-  .[j = `:=`(n_hoh = sum(1*RELATE == 101)),
-    by = .(YEAR, MONTH, YEAR_MONTH, CPSID)]
+  mutate(
+    .by = .(YEAR, MONTH, YEAR_MONTH, CPSID),
+    n_hoh = sum(1*RELATE == 101)
+  )
 
 table(cps_family_test$n_hoh, useNA = "always")
 
@@ -220,39 +264,6 @@ gc(cps_family_test)
 
 ```
 
-### Adjustment for Economic Impact Payments
-
-A key measure for development is family income, which at follow-up is used to determine eligibility for programming. The family income measure represented in the basic monthly file, FAMINC, is documented as *"...the total combined income during the past 12 months for all members of the householder's family. The questionnaire says that 'This includes money from jobs, net income from business, farm or rent, pensions, dividends, interest, social security payments and any other money income received' by members of the householder's family who are 15 years of age or older.* From investigation of patterns of income stability and employment status, it seems clear that federal Economic Impact Payments were included in this amount. However, eligibility for child care supports do not include these amounts. **\]Direct citation is necessary.\]**
-
-The first round of federal stimulus was signed on March 27, 2020 and [provided for](https://www.aarp.org/politics-society/advocacy/info-2020/coronavirus-stimulus-checks.html):
-
-* \$1,200 for single adults, and \$2,400 for married
-* \$500 for each child under 17
-* A 5% reduction in these benefits for every dollar earned over \$75,000 for individual, \$112,500 for heads of household, and \$150,000 for married joint filers /!\\ Note that the source only directly describes the benefit for individuals as reducing according to this schedule
-
-The timing of these payments was not precise. Given a mid-May deadline to submit banking information--after which individuals would receive a paper check rather than direct deposit, the timing of receipt is roughly assumed to be May 2020 although this likely varies meaningfully.
-
-The second round of federal stimulus was signed on March 27, 2020 and [provided for](https://www.aarp.org/money/taxes/info-2020/second-stimulus-checks.html):
-
-* \$600 for single adults, and \$1,200 for married 
-* \$600 for each child 16 or younger (/!\\ note that, per the current source, it is ambiguous whether this is the same or different than the previous threshold)
-* A 5% reduction in these benefits for every dollar earned over \$75,000 for individual, \$112,500 for heads of household, and $150,000 for married joint filers /!\\ Note that the source only directly describes the benefit for individuals as reducing according to this schedule
-
-Timing of payment for the second Economic Impact Payment was more tightly controlled than in the first round, and was set for payment on December 30th, 2020. We assume that this income was received as of January 2021.
-
-The third round of federal stimulus was issued starting in March 2021 and [provided for](https://www.aarp.org/money/taxes/info-2021/third-stimulus-checks.html):
-
-* \$1,400 for single adults, and \$2,800 for married
-* \$1,400 for each eligible dependent, including adult dependents
-* Full amount of the payment for \$75,000 for single filers, \$112,500 for head of household, and \$150,000 for married joint filers. (https://www.irs.gov/coronavirus/third-economic-impact-payment)
-* Reduction of amounts with full phase-out at \$80,000 for single filers, \$120,000 for head of household, and \$160,000 for married joint filers. This implied a significantly higher rate of phase-out, and one that is variable (https://www.irs.gov/newsroom/more-details-about-the-third-round-of-economic-impact-payments)
-* Removal of age cap -- all qualifying kids (not just under 17) were eligible for the third stimulus check
-
-With some exceptions, the majority of this Economic Impact Payment was sent as of March 30, 2021. We assume that this income was received as of April 2021.
-
-These payments were based on adjusted gross income (AGI) from 2019, or AGI from 2020 for the third payment if households had filed in time for consideration (as presumably it would benefit many households to do so). For simplicity, we assume that income at the baseline month is representative of this basis for determining eligibility.
-
-<!-- /!\ Revisit this -- this can likely be improved, especially considering the third economic payment -->
 
 
 ```{r determine would-be economic impact payments}
@@ -263,70 +274,15 @@ cps_base_income <-
              .(CPSID, faminc_draw0 = faminc_draw)]
 cps_pov <- 
   cps_family %>% 
-  merge(cps_base_income,
-        by = "CPSID",
-        all.x = TRUE) %>% 
-
-  # Adjust estimates of family income by economic impact payments
-  # /!\ Note that we assume that only own children (bio or step) are dependents though
-  # it may be worth more care determining alignment with FAMINC which is for the 
-  # "householder's family".
-  .[j = `:=`(eip1_est = 
-               case_when(filing_status == "single" ~ pmax(0, 1200 + n_own_kids_le16*500 - pmax(0, 0.05*(faminc_draw0 -  75000))),
-                         filing_status == "hoh"    ~ pmax(0, 2400 + n_own_kids_le16*500 - pmax(0, 0.05*(faminc_draw0 - 112500))),
-                         filing_status == "joint"  ~ pmax(0, 2400 + n_own_kids_le16*500 - pmax(0, 0.05*(faminc_draw0 - 150000)))),
-             eip2_est = 
-               case_when(filing_status == "single" ~ pmax(0,  600 + n_own_kids_le16*600 - pmax(0, 0.05*(faminc_draw0 -  75000))),
-                         filing_status == "hoh"    ~ pmax(0, 1200 + n_own_kids_le16*600 - pmax(0, 0.05*(faminc_draw0 - 112500))),
-                         filing_status == "joint"  ~ pmax(0, 1200 + n_own_kids_le16*600 - pmax(0, 0.05*(faminc_draw0 - 150000)))),
-             eip3_est = 
-               case_when(filing_status == "single" & faminc_draw0 < 75000                  ~ 1400*(1 + n_qual_kids),
-                         filing_status == "single" & between(faminc_draw0, 75000, 80000)   ~ pmax(0, (5000-(faminc_draw0-75000))/5000*1400*fam_size),
-                         filing_status == "single" & faminc_draw0 > 80000                  ~ 0,
-                         filing_status == "hoh"    & faminc_draw0 < 112500                 ~ 1400*(2 + n_qual_kids),
-                         filing_status == "hoh"    & between(faminc_draw0, 112500, 120000) ~ pmax(0, (7500-(faminc_draw0-112500))/7500*1400*fam_size),
-                         filing_status == "hoh"    & faminc_draw0 > 120000                 ~ 0,
-                         filing_status == "joint"  & faminc_draw0 < 150000                 ~ 1400*(1 + n_qual_kids),
-                         filing_status == "joint"  & between(faminc_draw0, 150000, 160000) ~ pmax(0, (10000-(faminc_draw0-150000))/10000*1400*fam_size),
-                         filing_status == "joint"  & faminc_draw0 > 160000                 ~ 0),
-             eip1_receipt = between((YEAR - 2020)*12 + (MONTH - 5), 0, 11),
-             eip2_receipt = between((YEAR - 2021)*12 + (MONTH - 1), 0, 11),
-             eip3_receipt = between((YEAR - 2021)*12 + (MONTH - 4), 0, 11))]
-```
-
-```{r check the assignment of eip receipts by filing status, eval = developer_mode}
-cps_pov_test <-
-  cps_pov %>%
-  .[j = `:=`(eip3_thres_full = 
-               case_when(filing_status == "single" ~ 80000,
-                         filing_status == "hoh"    ~ 120000,
-                         filing_status == "joint"  ~ 160000))]
-  
-cps_pov_test[, 
-        .(`1st EIP` = max(eip1_est, na.rm = TRUE),
-          `2nd EIP` = max(eip2_est, na.rm = TRUE),
-          `3rd EIP` = max(eip3_est, na.rm = TRUE)),
-        by = .(filing_status)] %>% 
-  kable()
-
-cps_pov_test[faminc_draw0 > eip3_thres_full, 
-        .(`3rd EIP` = max(eip3_est, na.rm = TRUE)),
-        by = .(filing_status)] %>% 
-  kable()
-
-gc(cps_pov_test)
-```
-
-```{r check the schedule of eip receipts, eval = developer_mode}
-cps_pov[YEAR >= 2020, 
-        .(`Received EIP #1` = max(eip1_receipt), 
-          `Received EIP #2` = max(eip2_receipt), 
-          `Received EIP #3` = max(eip3_receipt)), 
-        by = .(YEAR, MONTH)] %>% 
-  kable()
+  merge(
+    cps_base_income,
+    by = "CPSID",
+    all.x = TRUE)
 ```
 
 ```{r}
+# /!\ Turn this into a "stopifnot()" calculation
+
 # Check whether all values needed for poverty calculations are represented in the
 # relevant lookup tables. If not, make the appropriate updates in the 
 # `method--general-helper-functions.R` script
@@ -337,12 +293,14 @@ cps_faminc_vals <- sort(unique(cps_pov$FAMINC))
 
 ```
 
-```{r get fpl threshold for ccdf for CPS calcs}
+```{r get fpl threshold for prog for CPS calcs}
 # It's not strictly the case that this is provided directly by users, because a
 # custom income threshold such as based on state median income may have been 
 # provided
 
-ccdf_inc_thresh_fpl <- get_fpl_thresh_for_ccdf()
+# /!\ Need to allow for multiple
+
+prog_inc_thresh_fpl <- get_fpl_thresh_for_prog()
 ```
 
 
@@ -354,51 +312,37 @@ cps_pov <-
   
   # Remove economic impact payment information to get adjusted family income
   # relevant for program eligibility
-  .[j = faminc_draw := draw_inc(FAMINC)] %>% 
-  .[j = faminc_adj_unbounded := faminc_draw - ifelse(eip1_receipt, eip1_est, 0) -
-                                              ifelse(eip2_receipt, eip2_est, 0) -
-                                              ifelse(eip3_receipt, eip3_est, 0)] %>% 
-  
-  .[j = faminc_adj := pmax(0, faminc_adj_unbounded)] %>% 
+  mutate(
+    faminc_draw = draw_inc(FAMINC)
+  ) %>% 
   
   # Develop ratios
-  merge(fpl_by_month,
-        by.x = c("fam_size", "YEAR", "MONTH"),
-        by.y = c("fpl_fam_size", "fpl_year", "fpl_month"),
-        all.x = TRUE) %>% 
-  .[j = `:=`(fam_incpov_ratio     = faminc_draw / fpl,
-             fam_incpov_ratio_adj = faminc_adj  / fpl)] %>% 
-  # Bin family income
-  .[j = `:=`(
-             # Develop categories of household income to align with those in ACS1, which define the SAE targets
-             fam_incpov_ratio_cat_byMix       = bin_incpov_ratio(fam_incpov_ratio,     pov_breaks = c(0, 0.50, 1.00, 2.00, 4.00)),
-             fam_incpov_ratio_cat_byMix_adj   = bin_incpov_ratio(fam_incpov_ratio_adj, pov_breaks = c(0, 0.50, 1.00, 2.00, 4.00)),
-             fam_incpov_ratio_cat_hs_ccdf     = bin_incpov_ratio(fam_incpov_ratio,     pov_breaks = c(0, 1.00, ccdf_inc_thresh_fpl/100, 4.00)),
-             fam_incpov_ratio_cat_hs_ccdf_adj = bin_incpov_ratio(fam_incpov_ratio_adj, pov_breaks = c(0, 1.00, ccdf_inc_thresh_fpl/100, 4.00)),
-             fam_incpov_ratio_cat_to185       = bin_incpov_ratio(fam_incpov_ratio,     pov_breaks = c(0, 0.50, 1.25, 1.85, 4.00)),
-             fam_incpov_ratio_cat_to185_adj   = bin_incpov_ratio(fam_incpov_ratio_adj, pov_breaks = c(0, 0.50, 1.25, 1.85, 4.00)),
-             fam_incpov_ratio_cat_by50        = bin_incpov_ratio(fam_incpov_ratio,     pov_breaks = seq(0, 4, by = 0.50)),
-             fam_incpov_ratio_cat_by50_adj    = bin_incpov_ratio(fam_incpov_ratio_adj, pov_breaks = seq(0, 4, by = 0.50)),
-             fam_incpov_ratio_cat_by75        = bin_incpov_ratio(fam_incpov_ratio,     pov_breaks = c(0, 0.75, 1.50, 2.25, 4.00)),
-             fam_incpov_ratio_cat_by75_adj    = bin_incpov_ratio(fam_incpov_ratio_adj, pov_breaks = c(0, 0.75, 1.50, 2.25, 4.00)),
-             fam_incpov_ratio_cat_by100       = bin_incpov_ratio(fam_incpov_ratio,     pov_breaks = seq(0, 4, by = 1.00)),
-             fam_incpov_ratio_cat_by100_adj   = bin_incpov_ratio(fam_incpov_ratio_adj, pov_breaks = seq(0, 4, by = 1.00)),
-             
-             # Develop income measures to be used as outcomes of nowcasting
-             fam_incpov_ratio_le.5       = 1*(fam_incpov_ratio     <= 0.5),
-             fam_incpov_ratio_le.5_adj   = 1*(fam_incpov_ratio_adj <= 0.5),
-             fam_incpov_ratio_le1        = 1*(fam_incpov_ratio     <= 1.0),
-             fam_incpov_ratio_le1_adj    = 1*(fam_incpov_ratio_adj <= 1.0),
-             fam_incpov_ratio_le1.30     = 1*(fam_incpov_ratio     <= 1.30),
-             fam_incpov_ratio_le1.30_adj = 1*(fam_incpov_ratio_adj <= 1.30),
-             fam_incpov_ratio_le1.85     = 1*(fam_incpov_ratio     <= 1.85),
-             fam_incpov_ratio_le1.85_adj = 1*(fam_incpov_ratio_adj <= 1.85),
-             fam_incpov_ratio_le2        = 1*(fam_incpov_ratio     <= 2.0),
-             fam_incpov_ratio_le2_adj    = 1*(fam_incpov_ratio_adj <= 2.0),
-             fam_incpov_ratio_le2.25     = 1*(fam_incpov_ratio     <= 2.25),
-             fam_incpov_ratio_le2.25_adj = 1*(fam_incpov_ratio_adj <= 2.25),
-             fam_incpov_ratio_le4.00     = 1*(fam_incpov_ratio     <= 4.0),
-             fam_incpov_ratio_le4.00_adj = 1*(fam_incpov_ratio_adj <= 4.0))]
+  merge(
+    fpl_by_month,
+    by.x = c("fam_size", "YEAR", "MONTH"),
+    by.y = c("fpl_fam_size", "fpl_year", "fpl_month"),
+    all.x = TRUE) %>% 
+  mutate(
+    fam_incpov_ratio     = faminc_draw / fpl,
+    
+    # Bin family income
+    fam_incpov_ratio_cat_byMix       = bin_incpov_ratio(fam_incpov_ratio,     pov_breaks = c(0, 0.50, 1.00, 2.00, 4.00)),
+    fam_incpov_ratio_cat_hs_ccdf     = bin_incpov_ratio(fam_incpov_ratio,     pov_breaks = c(0, 1.00, ccdf_inc_thresh_fpl/100, 4.00)),
+    fam_incpov_ratio_cat_to185       = bin_incpov_ratio(fam_incpov_ratio,     pov_breaks = c(0, 0.50, 1.25, 1.85, 4.00)),
+    fam_incpov_ratio_cat_by50        = bin_incpov_ratio(fam_incpov_ratio,     pov_breaks = seq(0, 4, by = 0.50)),
+    fam_incpov_ratio_cat_by75        = bin_incpov_ratio(fam_incpov_ratio,     pov_breaks = c(0, 0.75, 1.50, 2.25, 4.00)),
+    fam_incpov_ratio_cat_by100       = bin_incpov_ratio(fam_incpov_ratio,     pov_breaks = seq(0, 4, by = 1.00)),
+    
+    # Develop income measures to be used as outcomes of nowcasting
+    # /!\ Check to ensure that independent measures of income interest are built here
+    fam_incpov_ratio_le.5       = 1*(fam_incpov_ratio     <= 0.5),
+    fam_incpov_ratio_le1        = 1*(fam_incpov_ratio     <= 1.0),
+    fam_incpov_ratio_le1.30     = 1*(fam_incpov_ratio     <= 1.30),
+    fam_incpov_ratio_le1.85     = 1*(fam_incpov_ratio     <= 1.85),
+    fam_incpov_ratio_le2        = 1*(fam_incpov_ratio     <= 2.0),
+    fam_incpov_ratio_le2.25     = 1*(fam_incpov_ratio     <= 2.25),
+    fam_incpov_ratio_le4.00     = 1*(fam_incpov_ratio     <= 4.0)
+  )
 ```
 
 ```{r if requested -- generate flags for income to custom threshold ratio}
@@ -407,6 +351,7 @@ if (exists("custom_income_thresh")) {
   # spec file
   if (!maxNA(cps_pov$fam_size) %in% custom_income_thresh$fam_size) {
     
+    # /!\ Need to make this a `stopifnot()` condition
     warning(glue("The `custom_income_thresh` table does not contain all family sizes present in the Current Population Survey microdata. It must reflect family sizes up through `maxNA(cps_pov$fam_size)`")) 
   }
   
@@ -419,20 +364,6 @@ if (exists("custom_income_thresh")) {
 }
 ```
 
-
-```{r check the correspondence of adjusted and unadjusted FAMINC numbers, eval = developer_mode}
-income_adj_plot <- 
-  ggplot(cps_pov[YEAR == 2020 & MONTH == 9],
-         aes(x = faminc_draw,
-             y = faminc_draw - faminc_adj,
-             color = factor(n_kids_le16))) +
-  geom_point(alpha = 0.4) +
-  geom_smooth() +
-  geom_vline(xintercept = 15e4)
-ggplotly(income_adj_plot)
-```
-
-<!-- It seems that there is a non-trivial number of households with higher income that are receiving Economic Impact Payments. Note--this is because `FAMINC` is reported categorically with top-coding at \$150,000, which is nearby the relevant cutoff for EIP payments for many families. Thus, some families who qualify for EIP payments based on lagged income may have current income that is above $150k, but which cannot be determined. -->
 
 <!-- The plot function above is noting missing values. Investigating those, it seems that there are missing values in the adjusted measure. -->
 
@@ -448,87 +379,6 @@ cps_pov[, .(income_is_NA     = sum(is.na(faminc_draw)) %>% comma(),
 ```{r check the overall rate of missingness for baseline family income, eval = developer_mode}
 cps_pov[is.na(faminc_adj),
         mean(is.na(faminc_draw0))]
-```
-
-<!-- Check the correspondence between adjusted and unadjusted poverty bins. -->
-
-```{r check on correspondence of poverty measures, eval = developer_mode}
-cps_pov[YEAR == 2020, 
-        table(fam_incpov_ratio_cat_by100,
-              fam_incpov_ratio_cat_by100_adj)]
-```
-
-A remaining support available to households during the pandemic is Unemployment Insurance intended to buoy household income during the economic crash. While eligibility for child care programs excludes consideration of the EIPs, it does consider UI benefits as income. Below, we compare our adjusted income measure to that of income plus UI benefits from the CPS's Annual Social and Economic Supplement (ASEC).
-
- <!-- /!\ Note: look for confirmation/documentation of UI income related to eligibility -->
-
-```{r check on the correspondence of adjust basic-monthly income with ASEC wage plus UI, eval = developer_mode}
-comp_sub <- 
-  copy(cps_pov) %>% 
-  .[ASECFLAG == 1 & YEAR %in% 2020:2021 & MONTH == 3 & INCWAGE != 99999999 & INCUNEMP != 999999 & AGE >= 15] %>% 
-  .[j = `:=`(all_inc  = sumNA(INCTOT),
-             all_wage = sumNA(INCWAGE),
-             all_ui   = sumNA(INCUNEMP),
-             n = .N),
-    by = CPSID] %>% 
-  .[j = `:=`(inc_plus_ui = all_wage + all_ui)] %>% 
-  .[j = adj_net_incui := faminc_adj - inc_plus_ui] %>% 
-  .[RELATE == 101]
-
-# ggplot(comp_sub,
-#        aes(x = faminc_draw,
-#            y = all_wage, 
-#            color = n)) +
-# #  geom_point() +
-#   geom_smooth()
-
-ggplot(comp_sub[faminc_adj < 150000],
-       aes(x = faminc_adj,
-           y = inc_plus_ui,
-           color = factor(YEAR))) +
-           #y = adj_net_incui)) +
-  #geom_point() +
-  geom_smooth() +
-  geom_abline(intercept = 0,
-              slope = 1)
-```
-
-<!-- From the above, it appears that our adjusted measure is below the calculation of household total wages plus unemployment insurance benefits. Note that we examine only smoothed lines rather than the data, because of the size of outliers. That fact motivates a next examination of smoothed medians rather than means. -->
-
-```{r compare median wage plus ui vs our adjusted measure, eval = developer_mode}
-# See this SO forum post for reference: https://stackoverflow.com/questions/65147186/geom-smooth-with-median-instead-of-mean
-rolling_median <- function(formula, data, n_roll = 201, ...) {
-  x <- data$x[order(data$x)]
-  y <- data$y[order(data$x)]
-  y <- zoo::rollmedian(y, n_roll, na.pad = TRUE)
-  structure(list(x = x, y = y, f = approxfun(x, y)), class = "rollmed")
-}
-
-predict.rollmed <- function(mod, newdata, ...) {
-  setNames(mod$f(newdata$x), newdata$x)
-}
-
-ggplot(comp_sub[faminc_draw < 150000],
-       aes(x = faminc_adj,
-           y = inc_plus_ui,
-           color = factor(YEAR))) +
-           #y = adj_net_incui)) +
-  #geom_point() +
-  geom_smooth(formula = y ~ x, 
-              method = "rolling_median", 
-              se = FALSE) +
-  geom_abline(intercept = 0,
-              slope = 1) +
-  scale_y_continuous(labels = comma) +
-  scale_x_continuous(labels = comma) +
-  scale_color_discrete(name = "") +
-  labs(title = "ASEC Total Wage + UI is Greater than Adjusted Basic Income",
-       subtitle = glue("Trend lines show smoothed median values",
-                       "Sample is March 2020 and 2021, Income Summed for HH Members Aged 15+",
-                       "Adjusted income below top-coded limit of $150,000"),
-       x = "EIP-Adjusted Family Income (Basic Monthly)",
-       y = "Summed Wage and UI (ASEC)") +
-  theme(legend.position = "bottom")
 ```
 
 <!-- For completeness, we also compare total family income for the basic monthly and ASEC data. Here, the summed "total income" measure in the ASEC is clearly above that for FAMINC, even at lower incomes where divide/investment/rent etc sources of income are less likely. Checking on definitions: -->
