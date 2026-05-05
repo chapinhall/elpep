@@ -21,14 +21,10 @@ load(glue("{output_path}geo_data_{my_output_tag}.Rda"))
 
 source("method--pull-and-process-acs5.R")
 
-acs5_filename <- glue("{output_path}acs5_variables_{my_output_tag}.csv")
-if (!file.exists(acs5_filename)) {
-  source("pull--acs5-general-data.R")
-}
 ```
 
 
-# Pull and Develop ACS 5-Year Data
+# Pull and Merge ACS5 Tables for Auxiliary Predictions in the SAE
 
 ```{r}
 
@@ -496,245 +492,12 @@ merge_reduce <- function(x, y) merge(x, y, by = "GEOID")
 acs5 <- Reduce(merge_reduce, acs5_tomerge)
 ```
 
-```{r merge new pulls to old construction}
-acs5_old <- read.csv(glue("{output_path}acs5_variables_{my_output_tag}.csv"))
-acs5_comp <- 
-  merge(
-    acs5,
-    acs5_old,
-    by.x = "GEOID",
-    by.y = "geo_val")
-```
-
-
-```{r build comparions}
-# Key fields, from 02a
-acs5_checks <- 
-  tribble(
-    ~acs5_old,                  ~acs5_new,
-    "incpov_lt6_r0to50_est",    "rIncPov0to50_Age0to6",
-    "incpov_lt6_r50to100_est",  "rIncPov50to100_Age0to6",
-    "incpov_lt6_r100to199_est", "rIncPov100to199_Age0to6",
-    "incpov_lt6_r200to299_est", "rIncPov200to299_Age0to6",
-    "f_lesshs_est",             "rEdLtHs_Female",
-    'm_lesshs_est',             "rEdLtHs_Male",
-    "f_hsgrad_est",             "rEdHs_Female",
-    "m_hsgrad_est",             "rEdHs_Male",
-    "f_somecoll_est",           "rEdSomeColl_Female",
-    "m_somecoll_est",           "rEdSomeColl_Male",
-    "f_coll_est",               "rEdColl_Female",
-    "m_coll_est",               "rEdColl_Male",
-    "pctMarried_est",           "rMarried",
-    "pctMale_noSp_est",         "rUnmarriedMaleHh",
-    "pctFemale_noSp_est",       "rUnmarriedFemaleHh",
-    "employrate_m_a2534_est",   "rEmplInclMilit_Male",
-    "employrate_f_a2534_est",   "rEmplInclMilit_Female",
-    "lfrate_m_a2534_est",       "rInLF_Male",
-    "lfrate_f_a2534_est",       "rInLF_Female"
-  )
-
-
-for (r in 1:nrow(acs5_checks)) {
-  check <- acs5_checks[r,]
-  my_plot <- 
-    acs5_comp %>% 
-    ggplot() + 
-    aes(
-      x = get(check$acs5_old),
-      y = get(check$acs5_new)
-    ) + 
-    geom_point() + 
-    geom_abline() +
-    labs(
-      x = check$acs5_old,
-      y = check$acs5_new
-    )
-  print(my_plot)
-}
-
-acs5_comp %>% filter(GEOID == GEOID[1]) %>% select(matches("wEmplInclMilit_Male|employrate_m_a2534_count"))
-
-```
-
-
-
-
-
-## Details of ACS 5-Year Aggregate Data Development
-
-```{r read ACS 5-year data and add miscellaneous constructions not handled in the pull}
-acs5tract <- 
-  fread(acs5_filename) %>% 
-  # Keep tracts with non-zero population.
-  .[(endyear == max(endyear)) & (tot_families_count > 0)] %>%
-  mutate(raceeth_wh_est   = raceeth_wh_h_est + raceeth_wh_nonh_est,
-         raceeth_wh_se    = sqrt(raceeth_wh_h_se^2 + raceeth_wh_nonh_se^2),
-         raceeth_wh_se    = se_col_sum(raceeth_wh_h_se, raceeth_wh_nonh_se),
-         raceeth_wh_count = raceeth_wh_h_count + raceeth_wh_nonh_count,
-         
-         raceeth_bl_est   = raceeth_bl_h_est + raceeth_bl_nonh_est,
-         raceeth_bl_se    = se_col_sum(raceeth_bl_h_se, raceeth_bl_nonh_se),
-         raceeth_bl_count = raceeth_bl_h_count + raceeth_bl_nonh_count,
-         
-         raceeth_h_est    = raceeth_amind_h_est + raceeth_as_h_est + raceeth_bl_h_est + 
-           raceeth_mult_h_est + raceeth_oth_h_est + raceeth_pacisl_h_est + raceeth_wh_h_est,
-         raceeth_h_se     = se_col_sum(raceeth_amind_h_se, raceeth_as_h_se, 
-                                       raceeth_bl_h_se, raceeth_mult_h_se, raceeth_oth_h_se,
-                                       raceeth_pacisl_h_se, raceeth_wh_h_se),
-         raceeth_h_count = raceeth_amind_h_count + raceeth_as_h_count + raceeth_bl_h_count + 
-           raceeth_mult_h_count + raceeth_oth_h_count + raceeth_pacisl_h_count +
-           raceeth_wh_h_count,
-         
-         ed_lths_n     = m_lesshs_est  * m_lesshs_count   + f_lesshs_est  * f_lesshs_count,
-         ed_hs_n       = m_hsgrad_est  * m_hsgrad_count   + f_hsgrad_est  * f_hsgrad_count,
-         ed_somecoll_n = m_somecoll_est* m_somecoll_count + f_somecoll_est* f_somecoll_count,
-         ed_coll_n     = m_coll_est    * m_coll_count     + f_coll_est    * f_coll_count,
-         ed_lths     = ed_lths_n     / (m_lesshs_count   + f_lesshs_count),
-         ed_hs       = ed_hs_n       / (m_hsgrad_count   + f_hsgrad_count),
-         ed_somecoll = ed_somecoll_n / (m_somecoll_count + f_somecoll_count),
-         ed_coll     = ed_coll_n     / (m_coll_count     + f_coll_count)) %>% 
-  data.table()
-
-```
-
-
-```{r prepare ACS 5-year geographic identifiers - tract-level}
-acs5tract <- 
-  acs5tract %>%
-  .[j = geo_val_string := str_pad(geo_val, width = 11, side = "left", pad = 0)] %>%
-  .[j = `:=`(STATEFIP  = substr(geo_val_string, 1, 2),
-             COUNTYFIP = substr(geo_val_string, 3, 5),
-             TRACTFIP  = substr(geo_val_string, 6, 11),
-             YEAR = endyear)] %>%
-  rename(GEOID = geo_val_string) %>% 
-  select(-one_of("source", "endyear", "geo", "geo_val", "NAME")) %>%
-  # Set order of the rows
-  setorder(YEAR, STATEFIP, COUNTYFIP, TRACTFIP) %>%
-  # Set order of the columns
-  setcolorder(c("YEAR", "STATEFIP", "COUNTYFIP", "TRACTFIP"))
-```
-
-<!-- ### Aggregate ACS 5-Year Data to the PUMA level -->
-
-<!-- Tract-level ACS5 data are aggregated to the PUMA-level for use in certain sensitivities of the Small Area Estimation method which develop estimates at the PUMA level (although our end goal is to get to smaller geographic levels.) -->
-
-```{r prepare ACS 5-year geographic identifiers - PUMA-level}
-# Add PUMA identifiers to tract-level 5-year aggregate data set. Drop tract identifiers.
-acs5puma <- 
-  merge(acs5tract, 
-        geo_crosswalk, 
-        by = c("STATEFIP", "COUNTYFIP", "TRACTFIP", "GEOID"), 
-        all.x = TRUE) %>%
-  filter(!is.na(PUMA)) %>%
-  select(-COUNTYFIP, -TRACTFIP) %>%
-  setorder(YEAR, STATEFIP, PUMA) %>%
-  setcolorder(c("YEAR", "STATEFIP", "PUMA"))
-```
-
-<!-- For tract-level average/share variables, store "stubs" of variable names in a list. -->
-
-<!-- Multiply tract-level average/share variables by corresponding tract-level denominator count variables to produce tract-level numerator count variables. -->
-
-<!-- Recall that original _count variables from the ACS input files store tract-level denominator count variables.
-/!\ This is an aspects of naming conventions that is confusing and is worth reconsidering for clarity in on-going work -->
-
-```{r prepare ACS 5-year geographic identifiers}
-
-avg_list <- str_subset(cn(acs5puma), "_est$") %>% str_remove(., "_est")
-
-check <- copy(acs5puma)
-
-# Go through all variables and adjust them to be suitable for summing where:
-# * "_est" is converted to a numerator count, 
-# * "_se" is converted to a variance
-# * "_count" is left as is. That's the denominator.
-for (var_name in avg_list) {
-  # /!\ Kludge to ignore fields that don't match conventions
-  if (str_detect(var_name, "Male_noSp|Female_noSp|^Married|pctMarried|^famtype")) next
-  acs5puma <- 
-    acs5puma %>% 
-    .[, paste0(var_name, "_est") := eval(parse(text=paste0(var_name, "_est")))*eval(parse(text=paste0(var_name, "_count")))] %>%
-    .[, paste0(var_name, "_se")  := eval(parse(text=paste0(var_name, "_se")))^2]
-}
-
-if (FALSE) {
-  acs5puma[PUMA == 3401, str_subset(cn(acs5puma), "r0to50"), with = FALSE]
-  check[j = numer := incpov_r0to50_est*incpov_r0to50_count]
-  check[PUMA== 3401, .(numer)]  
-}
-
-# Perform the sum
-acs5puma <-
-  acs5puma %>%
-  .[, lapply(.SD, sumNA), 
-    by = .(YEAR, STATEFIP, PUMA),
-    .SDcols = str_subset(cn(acs5puma), "_est$|_count$|_se$")]
-
-if (FALSE) {
-  acs5puma[PUMA == 3401, str_subset(cn(acs5puma), "r0to50"), with = FALSE]
-  check[PUMA == 3401, .(sum(numer), sum(incpov_r0to50_count))]  
-}
-
-# Construct PUMA-level average/share variables by taking the ratio of the PUMA-level numerator count variable and the PUMA-level denominator count variable.
-# Construct PUMA-level standard errors by taking the square root of the PUMA-level variance.
-
-for (var_name in avg_list) {
-  # /!\ Kludge to ignore fields that don't match conventions
-  if (str_detect(var_name, "Male_noSp|Female_noSp|^Married|pctMarried|^famtype")) next
-  acs5puma <-
-    acs5puma %>%
-    # /!\ Could improve readability with glue(), and ep <- function(x) eval(parse(text = x))
-    .[, paste0(var_name, "_est") := eval(parse(text=paste0(var_name, "_est")))/eval(parse(text=paste0(var_name, "_count")))] 
-}
-
-if (FALSE) {
-  acs5puma[PUMA == 3401, str_subset(cn(acs5puma), "r0to50"), with = FALSE]
-  check[PUMA == 3401, sum(numer) / sum(incpov_r0to50_count)]  
-}
-
-se_list <- str_subset(cn(acs5puma), "_se$") %>% str_remove(., "_se")
-for (var_name in se_list) {
-  # /!\ Kludge to ignore fields that don't match conventions
-  if (str_detect(var_name, "Male_noSp|Female_noSp|^Married|pctMarried|^famtype")) next
-  acs5puma <-
-    acs5puma %>%
-    .[, paste0(var_name, "_se") := sqrt(eval(parse(text=paste0(var_name, "_se"))))]
-}
-
-```
-
-```{r compare the tract- and puma-level data, eval = developer_mode}
-acs5comp <- 
-  acs5tract %>% 
-  merge(geo_crosswalk %>% select(GEOID, PUMA),
-        by = "GEOID") %>% 
-  merge(acs5puma,
-        by = "PUMA")
-
-# Looks right
-ggplot(acs5comp, aes(incpov_r0to50_est.y, incpov_r0to50_est.x)) + 
-  geom_point(alpha = 0.2) +
-  geom_smooth()
-
-# Audit the construction of the acs5puma
-acs5tract_test <- 
-  acs5tract %>% 
-  merge(geo_crosswalk %>% select(GEOID, PUMA),
-        by = "GEOID") %>% 
-  mutate(incpov_r0to50_num = incpov_r0to50_est*incpov_r0to50_count) %>% 
-  group_by(PUMA) %>% 
-  summarize(wgt = sum(incpov_r0to50_count),
-            n   = sum(incpov_r0to50_num)) %>% 
-  mutate(r   = n / wgt) %>% 
-  merge(acs5puma %>% select(PUMA, incpov_r0to50_est, incpov_r0to50_count),
-        by = "PUMA")
-#View(acs5tract_test %>% select(wgt, n, r, incpov_r0to50_est, incpov_r0to50_est))
-```
-
 ```{r}
 save(acs5tract, acs5puma,
      file = glue("{output_path}acs5_data_{my_output_tag}.Rda"))
 ```
+
+# Prepare Tables Used for Correlation of Income and Work Eligibility
 
 ```{r prepare county argument for fresh pull of acs5 data}
 if (exists("my_county_fip")) county_val <- my_county_fip else county_val <- NULL
@@ -811,71 +574,44 @@ inspect_fields(acs5_famconfig_wKids_raw)
 # Calculating work eligibility by hand
 acs5_workelig_withKids_denom <- 
   acs5_famconfig_wKids_raw %>% 
-  filter(own_kids_under18 == "SomeKidsUnder18",
-         family_type %in% c("Married", "UnmarriedMaleHh", "UnmarriedFemaleHh"),
-         lfp == "All",
-         status == "All")
+  filter(
+    own_kids_under18 == "SomeKidsUnder18",
+    family_type %in% c("Married", "UnmarriedMaleHh", "UnmarriedFemaleHh"),
+    lfp == "All",
+    status == "All"
+  )
 
 acs5_workelig_withKids_num <- 
   acs5_famconfig_wKids_raw %>% 
-  filter(own_kids_under18 == "SomeKidsUnder18",
-         (family_type == "Married" & status == "HusbandEmplWifeEmpl") | 
-         (str_detect(family_type, "Unmarried") & status == "Empl"))
+  filter(
+    own_kids_under18 == "SomeKidsUnder18",
+    (family_type == "Married" & status == "HusbandEmplWifeEmpl") | 
+      (str_detect(family_type, "Unmarried") & status == "Empl")
+  )
 
 acs5_workelig_withKids <- 
-  merge(acs5_workelig_withKids_num   %>% summarize(nEmpl = sum(estimate), .by = GEOID),
-        acs5_workelig_withKids_denom %>% summarize(nAll  = sum(estimate), .by = GEOID),
-        by = "GEOID") %>% 
-  mutate(r = nEmpl / nAll,
-         n = nEmpl,
-         w = nAll,
-         status = "WorkEligFam")
+  merge(
+    acs5_workelig_withKids_num   %>% summarize(nEmpl = sum(estimate), .by = GEOID),
+    acs5_workelig_withKids_denom %>% summarize(nAll  = sum(estimate), .by = GEOID),
+    by = "GEOID"
+  ) %>% 
+  mutate(
+    r = nEmpl / nAll,
+    n = nEmpl,
+    w = nAll,
+    status = "WorkEligFam"
+  )
 
 acs5_workelig_withKids <- 
-  bind_rows(acs5_workelig_withKids,
-            acs5_workelig_withKids %>% mutate(r = 1 - r, n = w - n, status = "NotWorkEligFam")) 
-
-# Audit the constructions here
-if (FALSE) {
-  my_g <- acs5_workelig_withKids$GEOID[1]
-  
-  acs5_workelig_withKids_old %>% filter(GEOID == my_g)  
-  acs5_workelig_withKids     %>% filter(GEOID == my_g)  
-  
-  acs5_famconfig_wKids_raw %>% filter(GEOID == my_g, own_kids_under18 == "SomeKidsUnder18") %>% select(-variable, -se, -geography, -table, -GEOID) %>% as.data.frame()
-  
-  # All families: 367
-  # Married: HusbandEmplWifeEmpl -- 130
-  # UnmarriedMaleHh: Empl = 28
-  # UnmarriedFemaleHh: Empl = 102
-  # Hand calc: (130+28+102)/367 = 70.8% ... this is below the 36% calculation
-  # Solutions -- 
-  # 1. either need to add handling in the meta data for these cases, or
-  # 2. split the calculations for married and for single families? 
-  #    - not sure if/how well this would work given the issues with the InLfp field
-  # 3. ... Maybe do this fully by hand?
-  
-  # New example -- 
-  # All families: 186
-  # Married: HusbandEmplWifeEmpl -- 88
-  # UnmarriedMaleHh: Empl = 19
-  # UnmarriedFemaleHh: Empl = 9
-  # Hand calc: (88+19+9)/186 = 62.3% ... WOking Fam est is 42%
-  
-}
+  bind_rows(
+    acs5_workelig_withKids,
+    acs5_workelig_withKids %>% mutate(r = 1 - r, n = w - n, status = "NotWorkEligFam")
+  ) 
 
 ```
 
 
 ```{r merge together data sets intended for estimating ccdf eligibility}
-merge_by_geoid <- function(x, y) {
-  # Remove duplicate fields
-  non_dup_fields <- c(cn(y)[!cn(y) %in% cn(x)], "GEOID")
-  merge(x, y %>% select(one_of(non_dup_fields)), by = "GEOID", all = TRUE)
-}
-# acs5_ccdf <-
-#   Reduce(merge_by_geoid,
-#          list(acs5_incpov_byage_wide, acs5_workelig_withKids_wide))
 
 save(list = c("acs5_incpov_byage", "acs5_workelig_withKids"), 
      file = glue("{output_path}acs5_ccdf_{my_output_tag}.Rda"))
