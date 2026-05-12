@@ -69,7 +69,8 @@ get_latest_pums_acs1_year <- function(start_from = as.integer(format(Sys.Date(),
           year = y,
           survey = "acs1",
           variables_filter = list(AGEP = 30:31),
-          show_call = FALSE
+          show_call = FALSE,
+          key = census_key
         )
       nrow(df) > 0
     }, error = function(e) FALSE)
@@ -96,7 +97,8 @@ get_latest_acs5_year <- function(start_from = as.integer(format(Sys.Date(), "%Y"
           year = y, 
           survey = "acs5", 
           output = "tidy", 
-          state = my_state_fip
+          state = my_state_abbr,
+          key = census_key
         )
       nrow(dat) > 0
     }, error = function(e) FALSE)
@@ -136,10 +138,10 @@ fred_key   <- str_trim(fred_key)
 
 ### Recast to correct data types ----------------------------------------------#
 
-inputs_to_numericize <- c("kid_age_thres_p")
-for (i in inputs_to_numericize) {
-  assign(i, as.numeric(get(i)))
-}
+# inputs_to_numericize <- c("kid_age_thres_p")
+# for (i in inputs_to_numericize) {
+#   assign(i, as.numeric(get(i)))
+# }
 
 
 ### recode true and false -----------------------------------------------------#
@@ -162,25 +164,31 @@ for (i in inputs_tf) {
 ### vectorize comma-separated inputs ------------------------------------------#
 
 inputs_to_vectorize <- 
-  c("local_ccdf_incratio_cuts",
-    "output_fpl_cuts")
+  c(
+    "local_prog_incratio_cuts",
+    "output_fpl_cuts"
+    )
 
 for (i in inputs_to_vectorize) {
   assign(i,
-         str_split(get(i), pattern = ",") %>% unlist() %>%  trim() %>% as.numeric())
+         get(i) %>% 
+           str_split(pattern = ",") %>% 
+           unlist() %>% 
+           trim() %>% 
+           as.numeric())
 }
 
 
 ### check validity of custom income inputs ------------------------------------#
 
 # If nothing has been provided, delete the table so that code handles it as missing
-if (all(is.na(custom_income_thresh$inc_thresh))) {
-  rm(custom_income_thresh)
-} else {
-  custom_income_thresh <- 
-    custom_income_thresh %>% 
-    filter(!is.na(inc_thresh))
-}
+# if (all(is.na(custom_income_thresh$inc_thresh))) {
+#   rm(custom_income_thresh)
+# } else {
+#   custom_income_thresh <- 
+#     custom_income_thresh %>% 
+#     filter(!is.na(inc_thresh))
+# }
 
 ### prepare inputs for age aggregation ----------------------------------------#
 
@@ -213,8 +221,10 @@ prep_age_month <- function(x, is_high_month = FALSE) {
 
 age_aggs <- 
   age_aggs %>% 
-  mutate(low_month  = prep_age_month(low_month),
-         high_month = prep_age_month(high_month, is_high_month = TRUE))
+  mutate(
+    low_month  = prep_age_month(low_month),
+    high_month = prep_age_month(high_month, is_high_month = TRUE)
+  )
 
 
 ### prepare inputs for map generation -----------------------------------------#
