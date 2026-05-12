@@ -85,7 +85,98 @@ acs5_pop_by_age <-
   construct_fields(
     numerator = "age"
   )
+```
+
+
+```{r split ages 18 to 19 and add to existing population pull}
+# Split the age18to19 group in half
+acs5_pop_by_age_split1819 <- 
+  acs5_sex_by_age_pull %>% 
+  filter(
+    age == "Age18to19"
+  ) %>% 
+  mutate(
+    estimate = estimate / 2,
+    moe      =      moe / 2,
+    se       =       se / 2
+  )
+
+acs5_pop_by_age_split1819 <- 
+  bind_rows(
+    acs5_pop_by_age_split1819 %>% mutate(age = "Age18"),
+    acs5_pop_by_age_split1819 %>% mutate(age = "Age19")
+  )
+
+stopifnot(
+  all(
+    with(
+      acs5_pop_by_age_split1819,
+      estimate[age == "Age18"] == estimate[age == "Age19"]
+    )
+  )
+)
+
+# Add these values to the existing data
+acs5_pop_by_age_aug <- 
+  bind_rows(
+    acs5_sex_by_age_pull,
+    acs5_pop_by_age_split1819
+  )
   
+# Check that this is as expected
+if (FALSE) {
+  acs5_pop_by_age_custom %>% 
+    filter(
+      GEOID == GEOID[1]
+    ) %>% 
+    filter(
+      age %in% c("Age18to19", "Age18", "Age19")
+    )  
+}
+```
+
+
+```{r build custom aggregations of ages}
+# Examine range of ages in naturally sorted order
+if (FALSE) {
+  sort(sort_by_char_nums(acs5_pop_by_age_aug$age %>% unique())) %>% as.character()  
+}
+
+
+# Add key population ranges
+acs5_pop_by_age_custom <- 
+  acs5_pop_by_age_aug %>% 
+  mutate(
+    age_agg = 
+      case_when(
+        age %in% c("Age0to5",   "Age5to9",   "Age10to14", "Age15to17", "Age18to19") ~ "Age0to19",
+        age %in% c("Age20to20", "Age21to21", "Age22to24", "Age25to29", "Age30to34", 
+                   "Age35to39", "Age40to44", "Age45to49", "Age50to54", "Age55to59", 
+                   "Age60to61", "Age62to64")                                        ~ "Age20to64",
+        age %in% c("Age65to66", "Age67to69", "Age70to74", "Age75to79", "Age80to85", 
+                   "Age85to85")                                                     ~ "Age65plus"
+      )
+    ) %>% 
+  filter(
+    age_agg %in% c("Age0to18", "Age19to64", "Age65plus")
+  )
+
+if (FALSE) {
+  acs5_pop_by_age_custom %>% 
+    select(age, age_agg) %>% 
+    mutate(
+      age = sort_by_char_nums(age)
+    ) %>% 
+    unique() %>% 
+    arrange(age)
+}
+
+
+acs5_pop_by_age_agg <- 
+  acs5_pop_by_age_custom %>% 
+  construct_fields(
+    numerator = "age_agg"
+  )
 ```
 
 
@@ -141,7 +232,7 @@ acs5_pov_bySexAge %>%
 ```
 
 
-## Poverty status in past 12 months by household type by number of related children under 18
+## Poverty status in Past 12 Months by Household Type by Number of Related Children Under 18
 
 ```{r}
 
@@ -169,7 +260,6 @@ acs5_hhtype <-
 ## Age by Ratio of Income to Poverty
 
 ```{r}
-
 acs5_incpov_byage_pull <- pull_my_table("B17024")
     
 inspect_fields(
@@ -177,79 +267,58 @@ inspect_fields(
   show_all_combos = TRUE
 )
 
+### Build age and poverty categories as close to the ACS1 income and age 
+# partitions as possible
+
+# Aggregate ages, and income to a key partition of c(0, 0.75, 1.30, 2.00, 4.00)),
+# which aligns with our targets to include specific policy targets of
+# 130, 138, and 205 (or at least nearby values)
 acs5_incpov_byage_prep <- 
   acs5_incpov_byage_pull %>% 
-  mutate(
-    age =
-      case_when(
-        age == "Age0to6"                         ~ "Age0to6",
-        str_detect(age, "Age(6to11|12to17)")     ~ "Age6to17",
-        str_detect(age, "Age(18|25|35|45|55)to") ~ "Age18to64",
-        str_detect(age, "Age(65|75)to")          ~ "AgeGe65",
-        TRUE                                     ~ age
-      )
-  )
-
-acs5_incpov_byage <- 
-  acs5_incpov_byage_prep %>% 
-  mutate(
-    inc_to_pov_ratio = 
-      case_when(
-        str_detect(inc_to_pov_ratio, "Pov(50|75)to") ~ "IncPov50to100",
-        TRUE ~ inc_to_pov_ratio
-      )
-  ) %>% 
   filter(
     age != "All",
     inc_to_pov_ratio != "All"
   ) %>% 
+  mutate(
+    age_agg =
+      case_when(
+        str_detect(age, "Age(0to|6to|12to)")     ~ "Age0to17",
+        str_detect(age, "Age(18|25|35|45|55)to") ~ "Age18to64",
+        str_detect(age, "Age(65|75)to")          ~ "AgeGe65",
+        TRUE                                     ~ NA
+      ),
+    inc_to_pov_ratio_agg = 
+      case_when(
+        str_detect(inc_to_pov_ratio, "IncPov(0to|50to)")                ~ "IncPov0to75", 
+        str_detect(inc_to_pov_ratio, "IncPov(75to|100)")                ~ "IncPov75to125",
+        str_detect(inc_to_pov_ratio, "IncPov(125to|150to|175to|185to)") ~ "IncPov125to200",
+        str_detect(inc_to_pov_ratio, "IncPov(200to|300to)")             ~ "IncPov200to400",
+        str_detect(inc_to_pov_ratio, "IncPov(400to|500plus)")           ~ "IncPov400plus"
+      )
+  )
+  
+# Examine output mappings
+acs5_incpov_byage_prep %>% 
+  select(age, age_agg) %>% 
+  unique() %>% 
+  mutate(age = sort_by_char_nums(age)) %>% 
+  arrange(age)
+
+acs5_incpov_byage_prep %>% 
+  select(inc_to_pov_ratio, inc_to_pov_ratio_agg) %>% 
+  unique() %>% 
+  mutate(inc_to_pov_ratio = sort_by_char_nums(inc_to_pov_ratio)) %>% 
+  arrange(inc_to_pov_ratio)
+
+# produce estimates
+acs5_incpov_byage <- 
+  acs5_incpov_byage_prep %>% 
   construct_fields(
     numerator = "inc_to_pov_ratio",
     by_vars = "age"
   )
-
-#stopifnot(all(acs5_incpov_byage %>% select(matches("^r.+_Age0to6")) %>% apply(1, sum) == 1))
-
-# Create a different partition
-acs5_incpov_byage_alt <- 
-  acs5_incpov_byage_prep %>% 
-  filter(
-    age != "All",
-    inc_to_pov_ratio != "All"
-  ) %>% 
-  mutate(
-    inc_to_pov_ratio_alt = 
-      case_when(
-        str_detect(inc_to_pov_ratio, "Pov(0|50|75)to")          ~ "IncPov0to100",
-        str_detect(inc_to_pov_ratio, "(100|125|150|175|185)to") ~ "IncPov100to199",
-        str_detect(inc_to_pov_ratio, "(200|300)to")             ~ "IncPov200to399",
-        str_detect(inc_to_pov_ratio, "(400to|500)")             ~ "IncPov400plus"
-      )
-  )
-
-# Check the reassignment
-if (FALSE) {
-  acs5_incpov_byage_alt %>% select(matches("inc_to")) %>% unique()
-}
-
-acs5_incpov_byage_alt <- 
-  acs5_incpov_byage_alt %>% 
-  construct_fields(
-    numerator = "inc_to_pov_ratio_alt",
-    by_vars = "age"
-  )
-
-#stopifnot(all(acs5_incpov_byage_alt %>% select(matches("^r.+_Age0to6")) %>% apply(1, sum) == 1))
-
-# Combine the different partitions
-acs5_incpov_byage_out <- 
-  merge(
-    x = acs5_incpov_byage,
-    y = acs5_incpov_byage_alt,
-    by = "GEOID"
-  )
-
 ```
+
 
 ## Ratio of Income to Poverty Level of Families in the Last 12 Months
 
@@ -351,9 +420,7 @@ acs5_empl_prep_Age22to64 <-
   acs5_empl_pull %>% 
   filter(
     sex != "All",
-    #str_detect(age, "Age(22|25|30|35|45|55|60|62)to")
-    str_detect(age, "Age25|Age30")
-    # /!\ Need to remove this after performing checks against the old acs5 constructions
+    str_detect(age, "Age(22|25|30|35|45|55|60|62)to")
   )
 
 acs5_empl <- 
@@ -465,8 +532,91 @@ acs5_edattain <-
 
 ```
 
+## Build All-Adults-Employed Status for Households, both Overall and Those with Kids
+
+<!-- Note: the complex hierarchy of this table makes it worth being highly deliberate  -->
+<!-- with calculations rather than seeking complex implementations of `construct_fields()` -->
+
+```{r identify the denominator for all-adults-working status}
+inspect_fields(acs5_famconfig_wKids_raw)
+inspect_fields(acs5_famconfig_wKids_raw, show_all_combos = TRUE)
+
+# Calculating work eligibility by hand
+acs5_workelig_withKids_denom <- 
+  acs5_famconfig_wKids_raw %>% 
+  filter(
+    own_kids_under18 == "SomeKidsUnder18",
+    family_type %in% c("Married", "UnmarriedMaleHh", "UnmarriedFemaleHh"),
+    lfp == "All",
+    status == "All"
+  )
+
+acs5_workelig_all_denom <- 
+  acs5_famconfig_wKids_raw %>% 
+  filter(
+    own_kids_under18 != "All",
+    family_type %in% c("Married", "UnmarriedMaleHh", "UnmarriedFemaleHh"),
+    lfp == "All",
+    status == "All"
+  )
+
+# Ensure we have isolated the desired conditions
+if (FALSE) {
+  inspect_fields(acs5_workelig_withKids_denom, show_all_combos = TRUE)  
+  inspect_fields(acs5_workelig_all_denom, show_all_combos = TRUE)  
+}
+```
+
+
+```{r identify the numerators for all-adults-working status}
+acs5_workelig_withKids_num <- 
+  acs5_famconfig_wKids_raw %>% 
+  filter(
+    own_kids_under18 == "SomeKidsUnder18",
+    (family_type == "Married" & status == "HusbandEmplWifeEmpl") | 
+      (str_detect(family_type, "Unmarried") & status == "Empl")
+  )
+
+acs5_workelig_all_num <- 
+  acs5_famconfig_wKids_raw %>% 
+  filter(
+    own_kids_under18 != "All",
+    (family_type == "Married" & status == "HusbandEmplWifeEmpl") | 
+      (str_detect(family_type, "Unmarried") & status == "Empl")
+  )
+
+# Ensure we have isolated the desired conditions
+if (FALSE) {
+  inspect_fields(acs5_workelig_withKids_num, show_all_combos = TRUE)  
+}
+```
+
+
+```{r construct desired work eligibility field}
+acs5_workelig <- 
+  merge(
+    acs5_workelig_withKids_num   %>% summarize(nEmpl_allHhs   = sum(estimate), .by = GEOID),
+    acs5_workelig_withKids_denom %>% summarize(nAll_allHhs    = sum(estimate), .by = GEOID), by = "GEOID") %>% 
+  merge(
+    acs5_workelig_withKids_num   %>% summarize(nEmpl_withKids = sum(estimate), .by = GEOID), by = "GEOID") %>% 
+  merge(
+    acs5_workelig_withKids_denom %>% summarize(nAll_withKids  = sum(estimate), .by = GEOID), by = "GEOID") %>% 
+  mutate(
+    rAllAdultsEmpl_allHhs   = nEmpl_allHhs   / nAll_allHhs,
+    rAllAdultsEmpl_withKids = nEmpl_withKids / nAll_withKids,
+    nAllAdultsEmpl_allHhs   = nEmpl_allHhs,
+    nAllAdultsEmpl_withKids = nEmpl_withKids,
+    nAllAdultsEmpl_withKids = nAll_allHhs,
+    nAllAdultsEmpl_withKids = nAll_withKids
+  )
+
+```
+
+
+## Build Constructions of Veteran Status
+
 ```{r pull; inspect; and build constructions for veteran status}
-acs5_vetstatus_bySexAge_raw <- pull_table("B21001", state = my_state_abbr, county = county_val, year = acs5_year)
+acs5_vetstatus_bySexAge_raw <- pull_my_table("B21001")
 
 inspect_fields(acs5_vetstatus_bySexAge_raw, show_all_combos = TRUE)
 
@@ -477,12 +627,12 @@ acs5_vetstatus <-
     subset_cond = "age %in% c('Age18to34', 'Age35to54', 'Age55to64')",
     subset_descr = "")
 
-
 ```
 
+## Build Constructions of Disability Status
 
 ```{r pull; inspect; and build constructions for disability}
-acs5_disab_bySexAge_raw     <- pull_table("B18101", state = my_state_abbr, county = county_val, year = acs5_year)
+acs5_disab_bySexAge_raw <- pull_my_table("B18101")
 
 inspect_fields(acs5_disab_bySexAge_raw, show_all_combos = TRUE)
 
@@ -496,9 +646,10 @@ acs5_disab <-
 
 ```
 
+# Build Constructions of Health Insurance Status
 
 ```{r pull; inspect; and build constructions for health insurance}
-acs5_healthins_bySexAge_raw <- pull_table("B27001", state = my_state_abbr, county = county_val, year = acs5_year)
+acs5_healthins_bySexAge_raw <- pull_my_table("B27001")
 
 inspect_fields(acs5_healthins_bySexAge_raw, show_all_combos = TRUE)
 
@@ -510,6 +661,46 @@ acs5_healthins <-
     subset_descr = "")
 
 
+```
+
+
+## Collect Results
+
+```{r collect}
+acs5_tomerge <- 
+  list(
+    acs5_pop_by_age, 
+    acs5_pop_by_age_agg,
+    #acs5_pop_by_age_lt18, # This includes duplicates to acs5_pop_by_age. Is left out until needed.
+    #acs5_pov_bySexAge, 
+    acs5_incpov_byage_out, 
+    acs5_raceeth4, 
+    acs5_hhtype,
+    acs5_empl, 
+    acs5_empl_inclMilit,
+    acs5_lfrate, 
+    acs5_lfrate_inclMilit, 
+    acs5_edattain,
+    acs5_edattain_bySex,
+    acs5_workelig,
+    acs5_vetstatus, 
+    acs5_disab, 
+    acs5_healthins
+  )
+
+# Retain only rate and std err of rate calculations
+acs5_tomerge <- lapply(acs5_tomerge, \(x) select(x, matches("GEOID|^(r|se_r|w|n)")))
+
+merge_reduce <- function(x, y) merge(x, y, by = "GEOID")
+
+acs5tract <- Reduce(merge_reduce, acs5_tomerge)
+```
+
+```{r}
+save(
+  acs5tract,
+  file = glue("{output_path}acs5_data_{my_output_tag}.Rda")
+)
 ```
 
 ## Examine Maps of Selected ACS5 Measures
@@ -558,16 +749,16 @@ make_acs5_map <- function(my_dat, my_field, my_label) {
 
 }
 
-make_acs5_map(acs5tract,      "incpov_r0to100_est",  "% in Poverty")
-make_acs5_map(acs5tract,      "incpov_r500plus_est", "% over 500% FPL")
+make_acs5_map(acs5tract,      "rIncPov0to100_Age18to64",  "% in Poverty")
+make_acs5_map(acs5tract,      "rIncPov500plus_Age18to64", "% over 500% FPL")
 
-make_acs5_map(acs5tract,      "ed_lths", "% Less than HS Degree")
-make_acs5_map(acs5tract,      "ed_coll", "% College Educated")
+make_acs5_map(acs5tract,      "rEdLtHs", "% Less than HS Degree")
+make_acs5_map(acs5tract,      "rEdColl", "% College Educated")
 
-make_acs5_map(acs5tract,      "raceeth_wh_nonh_est",    "% White (non-Hispanic)")
-make_acs5_map(acs5tract,      "raceeth_bl_nonh_est",    "% Black (non-Hispanic)")
-make_acs5_map(acs5tract,      "raceeth_h_est",          "% Hispanic")
-make_acs5_map(acs5tract,      "raceeth_amind_nonh_est", "% American Indian")
+# make_acs5_map(acs5tract,      "raceeth_wh_nonh_est",    "% White (non-Hispanic)")
+# make_acs5_map(acs5tract,      "raceeth_bl_nonh_est",    "% Black (non-Hispanic)")
+# make_acs5_map(acs5tract,      "raceeth_h_est",          "% Hispanic")
+# make_acs5_map(acs5tract,      "raceeth_amind_nonh_est", "% American Indian")
 
 make_acs5_map(acs5_vetstatus, "rVet",         "% Veterans")
 make_acs5_map(acs5_disab,     "rDisab",       "% Disabled")
@@ -575,161 +766,5 @@ make_acs5_map(acs5_healthins, "rNoHealthIns", "% Without Health Insurance")
 
 ```
 
-
-```{r collect}
-acs5_tomerge <- 
-  list(
-    acs5_pop_by_age, 
-    acs5_pop_by_age_lt18, 
-    #acs5_pov_bySexAge, 
-    acs5_incpov_byage_out, 
-    acs5_raceeth4, 
-    acs5_hhtype,
-    acs5_empl, 
-    acs5_empl_inclMilit,
-    acs5_lfrate, 
-    acs5_lfrate_inclMilit, 
-    acs5_edattain,
-    acs5_edattain_bySex,
-    acs5_vetstatus, 
-    acs5_disab, 
-    acs5_healthins
-  )
-
-# Retain only rate and std err of rate calculations
-acs5_tomerge <- lapply(acs5_tomerge, \(x) select(x, matches("GEOID|^(r|se_r|w|n)")))
-
-merge_reduce <- function(x, y) merge(x, y, by = "GEOID")
-
-acs5 <- Reduce(merge_reduce, acs5_tomerge)
-```
-
-
-## Build ACS5-based Estimate of Correlation Between Income and Work Status
-
-```{r fresh pull of both income and work status tables}
-# "Age by Ratio of Income to Poverty Level In the Past 12 Months"
-acs5_incpov_byage_raw    <- pull_table("B17024", state = my_state_abbr, county = county_val, year = acs5_year)
-
-# "Presence of Own Children Under 18 Years by Family Type by Employment Status"
-acs5_famconfig_wKids_raw <- pull_table("B23007", state = my_state_abbr, county = county_val, year = acs5_year)
-
-```
-
-```{r determine closest fpl cutoff to ccdf eligibility threshold}
-ccdf_inc_thresh_fpl <- get_fpl_thresh_for_ccdf()
-
-# Determine which inc-to-pov value from the tables is closest to the ccdf fpl
-# cutoff
-acs5_income_cutpoints <- c(0, 50, 75, 100, 125, 150, 175, 185, 200, 300, 400, 500)
-dev <- 
-  (acs5_income_cutpoints - ccdf_inc_thresh_fpl) %>% 
-  abs()
-
-nearest_incpov_cutpoint_to_ccdf <- 
-  acs5_income_cutpoints[which(dev == min(dev))]
-```
-
-```{r perform basic incpov calculations}
-acs5_incpov_byage_wide <- 
-  construct_fields(
-    df = acs5_incpov_byage_raw,
-    numerator = "inc_to_pov_ratio",
-    by_vars = "age",
-    subset_cond = "age %in% c('Age0to6', 'Age6to11')",
-    subset_descr = "")
-
-acs5_incpov_byage <- 
-  construct_fields(
-    df = acs5_incpov_byage_raw,
-    numerator = "inc_to_pov_ratio",
-    by_vars = "age",
-    subset_cond = "age %in% c('Age0to6', 'Age6to11')",
-    subset_descr = "", 
-    wide = FALSE)
-```
-
-```{r construct desired work eligibility field}
-inspect_fields(acs5_famconfig_wKids_raw)
-
-# /!\ These constructions have problems with respect handling complicated
-# and non-parallel hierarchies in the "InLfp" field
-# acs5_workelig_withKids_old_wide <- 
-#   construct_fields(
-#     df = acs5_famconfig_wKids_raw,
-#     subset_cond = "own_kids_under18 == 'SomeKidsUnder18'",
-#     #denom_subset = "status == 'All'",
-#     numerator = "status", 
-#     numerator_vals = c("HusbandEmplWifeEmpl", "Empl"),
-#     numerator_lab  = c("WorkEligFam"),
-#     subset_descr = "")
-# 
-# acs5_workelig_withKids_old <- 
-#   construct_fields(
-#     df = acs5_famconfig_wKids_raw,
-#     subset_cond = "own_kids_under18 == 'SomeKidsUnder18' & !(family_type == 'Married' & lfp %in% c('HusbandInLfp', 'HusbandNotInLfp'))",
-#     #denom_subset = "status == 'All'",
-#     numerator = "status", 
-#     numerator_vals = c("HusbandEmplWifeEmpl", "Empl"),
-#     numerator_lab  = c("WorkEligFam"),
-#     subset_descr = "",
-#     wide = FALSE)
-
-# Calculating work eligibility by hand
-acs5_workelig_withKids_denom <- 
-  acs5_famconfig_wKids_raw %>% 
-  filter(
-    own_kids_under18 == "SomeKidsUnder18",
-    family_type %in% c("Married", "UnmarriedMaleHh", "UnmarriedFemaleHh"),
-    lfp == "All",
-    status == "All"
-  )
-
-acs5_workelig_withKids_num <- 
-  acs5_famconfig_wKids_raw %>% 
-  filter(
-    own_kids_under18 == "SomeKidsUnder18",
-    (family_type == "Married" & status == "HusbandEmplWifeEmpl") | 
-      (str_detect(family_type, "Unmarried") & status == "Empl")
-  )
-
-acs5_workelig_withKids <- 
-  merge(
-    acs5_workelig_withKids_num   %>% summarize(nEmpl = sum(estimate), .by = GEOID),
-    acs5_workelig_withKids_denom %>% summarize(nAll  = sum(estimate), .by = GEOID),
-    by = "GEOID"
-  ) %>% 
-  mutate(
-    r = nEmpl / nAll,
-    n = nEmpl,
-    w = nAll,
-    status = "WorkEligFam"
-  )
-
-acs5_workelig_withKids <- 
-  bind_rows(
-    acs5_workelig_withKids,
-    acs5_workelig_withKids %>% mutate(r = 1 - r, n = w - n, status = "NotWorkEligFam")
-  ) 
-
-```
-
-
-```{r merge together data sets intended for estimating ccdf eligibility}
-<<<<<<< HEAD
-merge_by_geoid <- function(x, y) {
-  # Remove duplicate fields
-  non_dup_fields <- c(cn(y)[!cn(y) %in% cn(x)], "GEOID")
-  merge(x, y %>% select(all_of(non_dup_fields)), by = "GEOID", all = TRUE)
-}
-# acs5_ccdf <-
-#   Reduce(merge_by_geoid,
-#          list(acs5_incpov_byage_wide, acs5_workelig_withKids_wide))
-=======
->>>>>>> spring_refactor_acs5
-
-save(list = c("acs5_incpov_byage", "acs5_workelig_withKids"), 
-     file = glue("{output_path}acs5_ccdf_{my_output_tag}.Rda"))
-```
 
 
