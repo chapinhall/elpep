@@ -52,16 +52,13 @@ pull_table <- function(table_name,
     if (FALSE) {
       my_meta <- 
         get_acs5_metadata(year) %>% 
-        filter(str_detect(name, paste0(table_name, "_")))
+        filter(str_detect(name, table_name))
     }
     
     table_pull <-
       merge(table_pull,
             my_meta %>% 
-              filter(str_detect(name, paste0(table_name, "_"))) %>% 
-                # Adding the "_" avoid multiple matches of a table name in case
-                # of race/ethnicity letters that follow the table name, e.g.
-                # B18101 and B18101[A-I]
+              filter(str_detect(name, table_name)) %>% 
               develop_meta() %>% 
               select(-label, -concept) %>% 
               rename(variable = name),
@@ -86,7 +83,7 @@ pull_table <- function(table_name,
 #------------------------------------------------------------------------------#
 
 check_meta <- function(year, table_name, survey = "acs5") {
-  load_variables(2021, "acs5") %>% 
+  load_variables(year, "acs5") %>% 
     filter(str_detect(name, table_name))
 }
 
@@ -98,7 +95,9 @@ develop_meta <- function(table_meta, verbose = FALSE) {
   
   table_meta <- 
     table_meta %>% 
-    mutate(table = str_replace(name, "(\\w\\d+)\\w?_.+", "\\1")) 
+    mutate(
+      table = str_replace(name, "(\\w\\d+)\\w?_.+", "\\1")
+    ) 
   
   if (n_distinct(table_meta$table) > 1) stop("Expected only a single census table")
   
@@ -237,6 +236,21 @@ develop_meta <- function(table_meta, verbose = FALSE) {
                replace_na("All"))
   }
   
+  # Recode Number of Related Children Under 18 Years ---------------------------
+  if (any(str_detect(my_concepts, "NUMBER OF RELATED CHILDREN UNDER 18 YEARS"))) {
+    #table_meta <- filter(my_meta, str_detect(name, "B17012"))
+    table_meta <- 
+      table_meta %>% 
+      mutate(
+        own_kids_under18 =
+          case_when(
+            str_detect(label, "No child")           ~ "NoKidsUnder18",
+            str_detect(label, "1 or 2 children")    ~ "1or2KidsUnder18",
+            str_detect(label, "3 or 4 children")    ~ "3or4KidsUnder18",
+            str_detect(label, "5 or more children") ~ "5plusKidsUnder18") %>% 
+          replace_na("All"))
+  }
+  
   # Recode Grandparent Presence ------------------------------------------------
   if (any(str_detect(my_concepts, "GRANDPARENTS LIVING WITH OWN GRANDCHILDREN"))) {
     #table_meta <- filter(my_meta, str_detect(name, "B10051"))
@@ -254,6 +268,22 @@ develop_meta <- function(table_meta, verbose = FALSE) {
                            str_detect(label, "Other grandparents")         ~ "OtherGPPresent" ) %>% 
                  replace_na("All"))
     }
+  }
+  
+  # Recode Household Type ------------------------------------------------------
+  if (any(str_detect(my_concepts, "HOUSEHOLD TYPE"))) {
+    #table_meta <- filter(my_meta, str_detect(name, "B17016"))
+    table_meta <-
+      table_meta %>% 
+      mutate(
+        family_type = 
+          case_when(
+            str_detect(label, "[Mm]arried-couple family")         ~ "Married",
+            str_detect(label, "[Ff]emale householder, no spouse") ~ "UnmarriedFemaleHh",
+            str_detect(label, "[Mm]ale householder, no spouse")   ~ "UnmarriedMaleHh",
+            str_detect(label, "[Oo]ther famil(y|ies)")            ~ "Unmarried") %>% 
+          replace_na("All")
+      )
   }
   
   # Recode Labor Force, Employment Status, and Family Type ---------------------
@@ -331,16 +361,30 @@ develop_meta <- function(table_meta, verbose = FALSE) {
   if (any(str_detect(my_concepts, "EDUCATIONAL ATTAINMENT"))) { 
     table_meta <- 
       table_meta %>% 
-      mutate(ed_attain = 
-               case_when(str_detect(label, "High school graduate") ~ "hs", 
-                         str_detect(label, "Less than (high|9th)|Not high school graduate") ~
-                           "lths", 
-                         str_detect(label, "Some college")         ~ "EdSomeColl", 
-                         str_detect(label, "Associate's")          ~ "EdAssoc",
-                         str_detect(label, "Bachelor's")           ~ "EdColl", 
-                         str_detect(label, "Graduate")             ~ "EdHsGrad",
-                         str_detect(label, "Less than 9th")        ~ "EdLtHs") %>% 
-               replace_na("All"))
+      mutate(
+        ed_attain = 
+          case_when(
+            str_detect(label, "No schooling")         ~ "EdLtHs", # "EdNoSch", 
+            str_detect(label, "Nursery to 4th")       ~ "EdLtHs", # "EdLt4th", 
+            str_detect(label, "5th and 6th")          ~ "EdLtHs", # "EdGr5or6", 
+            str_detect(label, "7th and 8th")          ~ "EdLtHs", # "EdGr7or8", 
+            str_detect(label, "9th grade")            ~ "EdLtHs", # "EdGr9", 
+            str_detect(label, "10th grade")           ~ "EdLtHs", # "EdGr10", 
+            str_detect(label, "11th grade")           ~ "EdLtHs", # "EdGr11", 
+            str_detect(label, "12th grade, no dipl")  ~ "EdLtHs", # "EdGr12NoDipl", 
+            str_detect(label, "High school graduate") ~ "EdHs", 
+            str_detect(label, "Less than (high|9th)|Not high school graduate") ~
+              "EdLtHs", 
+            str_detect(label, "Some college")         ~ "EdSomeColl", 
+            str_detect(label, "Associate's")          ~ "EdAssoc",
+            str_detect(label, "Bachelor's")           ~ "EdColl", 
+            str_detect(label, "Graduate")             ~ "EdGrad",
+            str_detect(label, "Master's")             ~ "EdGrad",
+            str_detect(label, "Professional")         ~ "EdGrad",
+            str_detect(label, "Doctorate")            ~ "EdGrad",
+            str_detect(label, "Less than 9th")        ~ "EdLtHs"
+          ) %>% 
+          replace_na("All"))
   }
   
   # Recode Means of Transportation ---------------------------------------------
@@ -411,7 +455,6 @@ develop_meta <- function(table_meta, verbose = FALSE) {
             str_detect(str_to_lower(label), "no private health")   ~ "NoPrivIns") %>% 
           replace_na("All"))
   }
-  
   # Recode Birth History -------------------------------------------------------
   if (any(str_detect(my_concepts, "HAD A BIRTH IN THE PAST 12 MONTHS"))) { 
     table_meta <- 
@@ -487,6 +530,7 @@ develop_meta <- function(table_meta, verbose = FALSE) {
           replace_na("All"))
   }
   
+  
   ### Check for duplicates -----------------------------------------------------
   
   error_msg <- glue("Table {table_meta$table[1]} has label values that are not fully ",
@@ -508,7 +552,7 @@ inspect_fields <- function(df, show_all_combos = FALSE) {
   cat_vars <- setdiff(colnames(df), c("variable", "GEOID", "estimate", "moe", "se", "table", "geography"))
   meta_table <- 
     df %>% 
-    select(all_of(cat_vars)) %>% 
+    select(one_of(cat_vars)) %>% 
     unique()
   
   if (show_all_combos) {
@@ -541,14 +585,14 @@ construct_fields <-
     subset_cond  = NULL,   # logical statement 
     denom_subset = NULL,   # logical statement, optionally defining a denominator condition
     subset_descr = NULL,   # This is a back door to labeling the subset, currently
-                           #   necessary because the logic for auto-translating the `subset_cond`
-                           #   isn't robust to handle multiple conditions, or `!=`s
+    #   necessary because the logic for auto-translating the `subset_cond`
+    #   isn't robust to handle multiple conditions, or `!=`s
     by_vars = NULL,        # Character vector with fields to use as drill-downs
     numerator,             # Character value with name of field that represents the numerator
     numerator_vals = NULL, # Optional: a vector or regex expression for the numerator
-                           #   variable to match to indicate a single key condition
+    #   variable to match to indicate a single key condition
     numerator_lab = NULL,  # Optional: if numerator_vals is specified, this value 
-                           #   will be used to label the condition for output
+    #   will be used to label the condition for output
     wide = TRUE            # Indicate whether output should be wide vs long
   ) {
     
@@ -583,7 +627,7 @@ construct_fields <-
     ### Check on specification
     cat_vars <- setdiff(colnames(df), c("variable", "GEOID", "estimate", "moe", "se", "table"))
     if (!all(by_vars %in% cat_vars)) stop("'by' variables weren't specified properly")
-
+    
     ### Apply subset
     df_numer <- df
     df_denom <- df
@@ -609,11 +653,11 @@ construct_fields <-
         # of civilian, rather than "All"
         if ("All" %in% df_numer[, v]) {
           # see this approach in this "programming with dplyr" article: https://dplyr.tidyverse.org/articles/programming.html
-          df_numer <- df_numer %>% filter(.data[[v]] == "All") %>% select(-any_of(v))
+          df_numer <- df_numer %>% filter(.data[[v]] == "All") %>% select(-one_of(v))
         }
         if ("All" %in% df_denom[, v]) {
           # see this approach in this "programming with dplyr" article: https://dplyr.tidyverse.org/articles/programming.html
-          df_denom <- df_denom %>% filter(.data[[v]] == "All") %>% select(-any_of(v))
+          df_denom <- df_denom %>% filter(.data[[v]] == "All") %>% select(-one_of(v))
         }
       }
     }
@@ -637,7 +681,7 @@ construct_fields <-
             by = c("GEOID", by_vars)) %>% 
       mutate(r = numer_n / denom_n,
              r_se = se_ratio(numer_n, denom_n, numer_se, denom_se)) %>% 
-      select(all_of(c("GEOID", by_vars, "numerator", "r", "r_se", "numer_n", "numer_se", "denom_n"))) %>% 
+      select(one_of("GEOID", by_vars, "numerator", "r", "r_se", "numer_n", "numer_se", "denom_n")) %>% 
       rename(se_r = r_se, 
              n = numer_n,
              se_n = numer_se,
@@ -814,8 +858,8 @@ pick_acs5 <-
                        numerator = numerator)
     
     return(acs5_constr)
-}
-  
+  }
+
 
 ### Test sample implementation -------------------------------------------------
 
