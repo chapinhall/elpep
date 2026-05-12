@@ -36,15 +36,18 @@ st_var <- ifelse(base_year <= 2022,
                  "STATE")
 pull_vars <- 
   c("SERIALNO", st_var, "PUMA", "FS", "SPORDER", rel_var, "SEX", "AGEP", 
-    "RAC2P", "HISP", "SCH", "SCHL", "ESR", "COW", "OCCP", "INDP", "FINCP", 
-    "POVPIP", "TYPEHUGQ")
+    "RAC2P", "HISP", "SCH", "SCHL", "ESR", "WKHP", "COW", "OCCP", "INDP", "FINCP", 
+    "POVPIP", "TYPEHUGQ", "DIS", "SSIP")
+
+census_api_key(census_key, install = FALSE, overwrite = TRUE)
 
 # View all available variables for acs1
 if (FALSE) {
   my_pums <- 
     pums_variables %>% 
-    filter(year == base_year,
-           survey == "acs1"
+    filter(
+      year == base_year,
+      survey == "acs1"
     )
   View(my_pums)
 }
