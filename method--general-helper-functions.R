@@ -105,13 +105,17 @@ if (FALSE) {
 # Recode age ------------------------------------------------------------------#
 
 bin_age <- function(a) {
-  case_when(between(a,  0,  2) ~ "0to2", 
-            between(a,  3,  5) ~ "3to5", 
-            #between(a,  5,  5) ~ "5to5", 
-            between(a,  6,  8) ~ "6to8", 
-            between(a,  9, 12) ~ "9to12", 
-            between(a, 13, 14) ~ "13to14") %>% 
-    factor(levels = c("0to2", "3to5", "6to8", "9to12", "13to14"))
+  case_when(
+    between(a,  0,  2) ~ "0to2", 
+    between(a,  3,  5) ~ "3to5", 
+    #between(a,  5,  5) ~ "5to5", 
+    between(a,  6,  8) ~ "6to8", 
+    between(a,  9, 12) ~ "9to12", 
+    between(a, 13, 14) ~ "13to14"
+    ) %>% 
+    factor(
+      levels = c("0to2", "3to5", "6to8", "9to12", "13to14")
+    )
 }
 
 # Recode poverty decimal ------------------------------------------------------#
@@ -139,22 +143,24 @@ bin_incpov_ratio <- function(incpov_ratio, pov_breaks = seq(0, 3, by = 0.5)) {
 # Recode industry codes -------------------------------------------------------#
 
 bin_industry <- function(i) {
-  case_when(between(i, 0170, 0490) ~ "ag",
-            between(i, 0770, 0770) ~ "constr",
-            between(i, 1070, 3990) ~ "manuf",
-            between(i, 4070, 4590) ~ "whtrade",
-            between(i, 4760, 5790) ~ "retail_trade",
-            between(i, 6070, 6390) ~ "transport",
-            between(i, 0570, 0690) ~ "transport",
-            between(i, 6470, 6780) ~ "info",
-            between(i, 6870, 7190) ~ "finance",
-            between(i, 7270, 7790) ~ "profscimgmt_services",
-            between(i, 7860, 8470) ~ "educhealthsoc_services",
-            between(i, 8561, 8690) ~ "artsfood_services",
-            between(i, 8770, 9290) ~ "other_services",
-            between(i, 9370, 9590) ~ "public",
-            between(i, 9670, 9870) ~ "military",
-            TRUE ~ "NA")
+  case_when(
+    between(i, 0170, 0490) ~ "ag",
+    between(i, 0770, 0770) ~ "constr",
+    between(i, 1070, 3990) ~ "manuf",
+    between(i, 4070, 4590) ~ "whtrade",
+    between(i, 4760, 5790) ~ "retail_trade",
+    between(i, 6070, 6390) ~ "transport",
+    between(i, 0570, 0690) ~ "transport",
+    between(i, 6470, 6780) ~ "info",
+    between(i, 6870, 7190) ~ "finance",
+    between(i, 7270, 7790) ~ "profscimgmt_services",
+    between(i, 7860, 8470) ~ "educhealthsoc_services",
+    between(i, 8561, 8690) ~ "artsfood_services",
+    between(i, 8770, 9290) ~ "other_services",
+    between(i, 9370, 9590) ~ "public",
+    between(i, 9670, 9870) ~ "military",
+    TRUE ~ "NA"
+  )
 }
 
 # Recode CPS FAMINC field as poverty interval ---------------------------------#
@@ -167,24 +173,25 @@ recode_intervals <- function(x) str_replace_all(x, "\\(|\\)|\\[|\\]", "") %>% st
 draws <- runif(10, 0, 4)
 cbind(draws, cut(draws, breaks = c(seq(0, 10, by = 0.5))) %>% as.character() %>% fct_relabel(recode_intervals) %>% as.character())
 
-faminc_bounds <- tribble(~faminc, ~faminc_lb, ~faminc_ub,
-                         100,      0,   4999,
-                         210,   5000,   7499,
-                         300,   7500,   9999,
-                         430,  10000,  12499,
-                         470,  12500,  14999,
-                         500,  15000,  19999,
-                         600,  20000,  24999,
-                         710,  25000,  29999,
-                         720,  30000,  34999,
-                         730,  35000,  39999,
-                         740,  40000,  49999,
-                         820,  50000,  59999,
-                         830,  60000,  74999,
-                         841,  75000,  99999,
-                         842, 100000, 149999,
-                         843, 150000, 150000,
-                         )
+faminc_bounds <- 
+  tribble(~faminc, ~faminc_lb, ~faminc_ub,
+              100,          0,       4999,
+              210,       5000,       7499,
+              300,       7500,       9999,
+              430,      10000,      12499,
+              470,      12500,      14999,
+              500,      15000,      19999,
+              600,      20000,      24999,
+              710,      25000,      29999,
+              720,      30000,      34999,
+              730,      35000,      39999,
+              740,      40000,      49999,
+              820,      50000,      59999,
+              830,      60000,      74999,
+              841,      75000,      99999,
+              842,     100000,     149999,
+              843,     150000,     150000
+  )
 
 # Calculate income-to-pov ratios based on federal poverty line estimates ------#
 
@@ -196,17 +203,20 @@ faminc_bounds <- tribble(~faminc, ~faminc_lb, ~faminc_ub,
 # Source for 2023: https://aspe.hhs.gov/topics/poverty-economic-mobility/poverty-guidelines/prior-hhs-poverty-guidelines-federal-register-references/2023-poverty-guidelines-computations
 # Source for 2024: https://aspe.hhs.gov/topics/poverty-economic-mobility/poverty-guidelines
 # Source for 2025: https://aspe.hhs.gov/topics/poverty-economic-mobility/poverty-guidelines
+# Source for 2025: https://aspe.hhs.gov/topics/poverty-economic-mobility/poverty-guidelines
 
 fpl_by_year <- 
-  tribble(~fpl_fam_size, ~fpl_2018, ~fpl_2019, ~fpl_2020, ~fpl_2021, ~fpl_2022, ~fpl_2023, ~fpl_2024, ~fpl_2025,
-                      1,     12140,     12490,    12760,      12880,     13590,     14580,     15060,     15650,
-                      2,     16460,     16910,    17240,      17420,     18310,     19720,     20440,     21150,
-                      3,     20780,     21330,    21720,      21960,     23030,     24860,     25820,     26650,
-                      4,     25100,     25750,    26200,      26500,     27750,     30000,     31200,     32150,
-                      5,     29420,     30170,    30680,      31040,     32470,     35140,     36580,     37650,
-                      6,     33740,     34590,    35160,      35580,     37190,     40280,     41960,     43150,
-                      7,     38060,     39010,    39640,      40120,     41910,     45420,     47340,     48650,
-                      8,     42380,     43430,    44120,      44660,     46630,     50560,     52720,     54150)
+  tribble(
+    ~fpl_fam_size, ~fpl_2018, ~fpl_2019, ~fpl_2020, ~fpl_2021, ~fpl_2022, ~fpl_2023, ~fpl_2024, ~fpl_2025, ~fpl_2026,
+                1,     12140,     12490,    12760,      12880,     13590,     14580,     15060,     15650,     15960,
+                2,     16460,     16910,    17240,      17420,     18310,     19720,     20440,     21150,     21640,
+                3,     20780,     21330,    21720,      21960,     23030,     24860,     25820,     26650,     27320,
+                4,     25100,     25750,    26200,      26500,     27750,     30000,     31200,     32150,     33000,
+                5,     29420,     30170,    30680,      31040,     32470,     35140,     36580,     37650,     38680,
+                6,     33740,     34590,    35160,      35580,     37190,     40280,     41960,     43150,     44360,
+                7,     38060,     39010,    39640,      40120,     41910,     45420,     47340,     48650,     50041,
+                8,     42380,     43430,    44120,      44660,     46630,     50560,     52720,     54150,     55720
+  )
 
 # Augment the table to generate FPL values for families up to size 20
 fpl_by_year_fam_size7 <- fpl_by_year %>% filter(fpl_fam_size == 7) %>% dplyr::select(-fpl_fam_size)
@@ -234,27 +244,50 @@ cpi <-
 
 fpl_by_month <- 
   fpl_by_year_aug %>% 
-  pivot_longer(cols = -fpl_fam_size,
-               names_to = "fpl_year",
-               values_to = "fpl") %>% 
-  mutate(fpl_year = str_replace(fpl_year, "fpl_", "") %>% as.numeric()) %>% 
-  merge(cpi,
-        by = "fpl_year") %>% 
-  mutate(fpl = fpl * ytd_infl) %>% 
-  dplyr::select(fpl_year, fpl_month, fpl_fam_size, ytd_infl, fpl) %>% 
+  pivot_longer(
+    cols = -fpl_fam_size,
+    names_to = "fpl_year",
+    values_to = "fpl"
+  ) %>% 
+  mutate(
+    fpl_year = str_replace(fpl_year, "fpl_", "") %>% as.numeric()
+  ) %>% 
+  merge(
+    cpi,
+    by = "fpl_year"
+  ) %>% 
+  mutate(
+    fpl = fpl * ytd_infl
+  ) %>% 
+  dplyr::select(
+    fpl_year, fpl_month, fpl_fam_size, ytd_infl, fpl
+  ) %>% 
   data.table()
 
 if (FALSE) {
   fpl_by_month %>% 
-    filter(fpl_fam_size %in% 1:8) %>% 
-    mutate(y_m = fpl_year + (fpl_month - 1) / 12) %>% 
-    ggplot(aes(x = y_m,
-               y = fpl,
-               color = factor(fpl_year))) +
-    geom_line(linewidth = 1) +
-    scale_y_continuous(labels = comma) +
-    facet_wrap(~fpl_fam_size,
-               scale = "free")
+    filter(
+      fpl_fam_size %in% 1:8
+    ) %>% 
+    mutate(
+      y_m = fpl_year + (fpl_month - 1) / 12
+    ) %>% 
+    ggplot(
+      aes(
+        x = y_m,
+        y = fpl,
+        color = factor(fpl_year))
+    ) +
+    geom_line(
+      linewidth = 1
+    ) +
+    scale_y_continuous(
+      labels = comma
+    ) +
+    facet_wrap(
+      ~fpl_fam_size,
+      scale = "free"
+    )
 }
   
 # Note -- this is semi-deprecated, since it was easier to implement in the
@@ -296,7 +329,7 @@ if (FALSE) {
         sapply(1:8, function(x) get_pov_threshold(x, year = base_year, month = 1)))
 }
 
-get_fpl_thresh_for_ccdf <- function(fam_size_calc = 4) {
+get_fpl_thresh_for_prog <- function(fam_size_calc = 4) {
   if (exists("custom_income_thresh")) {
     custom_inc_thresh_fam4 <- 
       custom_income_thresh %>% 
@@ -525,6 +558,14 @@ sort_by_char_nums <- function(x) {
   
   factor(x, levels = unique(df$q))
     
+}
+
+pad_num_left <- function(x, width) {
+  str_pad(
+    x, 
+    side = "left", 
+    width = width,
+    pad = "0")
 }
 
 if (FALSE) {
