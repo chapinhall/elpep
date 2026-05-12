@@ -21,134 +21,150 @@ for (f in c("acs1", "acs5", "pop", "geo")) {
 }
 ```
 
-### Motivating target choices for the SAE
-
-Our application Small Area Estimation (SAE) methods attempts to bring PUMA-level phenomena and represent them down to the Census tract level. The specific choice of categories $c=1,...,C$ which we observe children as falling into at the PUMA level, and which we hope to predict at the tract level, depend on a balance of community characteristics that are (1) important to have measured in smaller areas as of the base-line year (as opposed to having lagged measures); and (2) at a level of detail that can be effectively captured.
-
-With respect to that first item, at the time of this draft we expect that family income-to-poverty status and work status both expect to be highly dynamic, given changes in hiring and labor force participation and high inflation. With respect to the second item, while we would ideally want to have detailed information about household composition, precise income-to-poverty status, and details of work, the more detailed we set our $C$ categories, the less precision we will have.
-
-The figures below examine how evenly the ACS1 sample is divided among different category schemes.
-
 ```{r function to show distribution}
 show_acs1_cat_density <- function(my_cat, my_subtitle) {
-  ggplot(acs1_child,
-         aes(x = get(my_cat))) +
+  acs1_elig %>% 
+    ggplot() +
+    aes(
+      x = get(my_cat)
+    ) +
     geom_bar() +
-    facet_wrap(~ child_agegroup_combo) +
-    labs(title = "Number of ACS1 Sample Observations by Category Scheme",
-         subtitle = my_subtitle,
-         x = "") +
+    facet_wrap(
+      ~ cAge
+    ) +
+    labs(
+      title = "Number of ACS1 Sample Observations by Category Scheme",
+      subtitle = my_subtitle,
+         x = ""
+    ) +
     theme_minimal() + 
-    theme(axis.text.x = element_text(angle = 90,
-                                     hjust = 1))
+    theme(
+      axis.text.x = element_text(angle = 90, hjust = 1)
+    )
+}
+
+if (FALSE) {
+  show_acs1_cat_density(
+    "cFam_incpov_ratio_cat_by100",
+    "Income-to-Poverty by 100%s")  
+  show_acs1_cat_density(
+    "cFam_incpov_ratio_cat_mix",   
+    "Income-to-Poverty with Detail Below Poverty")
+  show_acs1_cat_density(
+    "cWorkThresh_incpov_status130", 
+    "Combo of Family Work Eligibility and Income-to-Poverty Aligned with Program Eligibility Thresholds")
 }
 ```
 
-Below we see the size of the ACS1 sample partitioned by income-to-poverty categories defined by "100%"s. This is reasonably even at lower levels.
-
-```{r examine overall distribution of ACS1 sample for poverty - pov}
-show_acs1_cat_density("fam_incpov_ratio_cat_by100", "Income-to-Poverty by 100%s")
-```
-
-Next, we examine effectively the same distribution, but with more detail below 100% of the FPL. While this cuts the ACS1 sample more thinly, it also would better differentiate circumstances for families that may be very important for predicting eligibility status in the nowcasting.
-
-```{r examine overall distribution of ACS1 sample with detail below poverty - mix}
-# This examines whether sample density is likely sufficient to characterize 
-# population shares below poverty (broken into ranges of 0-50 and 50-100)
-show_acs1_cat_density("fam_incpov_ratio_cat_mix", "Income-to-Poverty with Detail Below Poverty")
-```
-
-Below, we see the size of the sample partitioned jointly by household work eligibility for CCDF, and income-to-poverty bands that are somewhat larger and chosen to align with the CCDF income threshold of `r local_ccdf_incratio_base`% of FPL. Although there is no requirement in either the SAE or nowcasting methods to have this alignment, this specification will allow for later direct comparison of SAE estimates of CCDF eligibility for the base year `r base_year` and the nowcast estimates.
-
-```{r examine overall distribution of ACS1 sample with detail below poverty}
-# Here is the density tailored to the local ccdf threshold
-
-show_acs1_cat_density("work_incpov_mix", 
-                      glue("Combo of Family Work Eligibility for CCDF and Income-to-Poverty Aligned with the\nCCDF Threshold of {local_ccdf_incratio_base}% FPL"))
-
-```
-
-The figures below explore the amount of variation in each category across PUMAs. We perform this check to examine the extent to which there are gaps--specifically, exact zeroes--of children in given categories.
 
 ```{r function examine PUMA-level counts of each category}
 show_acs1_cat_density_by_puma <- function(my_cat, my_subtitle) {
- ggplot(acs1_child,
-       aes(x = PUMA)) +
+ acs1_elig %>% 
+    ggplot() +
+    aes(
+      x = PUMA
+    ) +
   geom_bar() +
-  facet_grid(get(my_cat) ~ child_agegroup_combo,
-             scales = "free_y") +
-  labs(title = "Number of ACS1 Sample Observations by PUMA, by Age Group and Category",
-       subtitle = my_subtitle,
-       caption = "(Note: scale of y-axis varies to show detail)",
-       y = "Count of Observations in ACS1 Sample") +
+  facet_grid(
+    get(my_cat) ~ child_agegroup_combo,
+    scales = "free_y"
+  ) +
+  labs(
+    title = "Number of ACS1 Sample Observations by PUMA, by Age Group and Category",
+    subtitle = my_subtitle,
+    caption = "(Note: scale of y-axis varies to show detail)",
+    y = "Count of Observations in ACS1 Sample"
+  ) +
   theme_minimal() + 
-  theme(axis.text.x = element_text(angle = 90,
-                                   hjust = 1))  
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1)
+  )  
+}
+
+if (FALSE) {
+  show_acs1_cat_density_by_puma(
+    "cFam_incpov_ratio_cat_by100", 
+    "Income-to-Poverty Ratio, with Detail Below 100% FPL")  
+  show_acs1_cat_density_by_puma(
+    "cFam_incpov_ratio_cat_with130", 
+    "Combo of Family Work Eligibility and Income-to-Poverty Aligned with Program Eligibility Thresholds")
+  show_acs1_cat_density_by_puma(
+    "cWorkThresh_incpov_status130", 
+    "Combo of Family Work Eligibility and Income-to-Poverty Aligned with Program Eligibility Thresholds")
 }
 ```
 
 
-```{r examine PUMA-level counts for poverty with detail, fig.height = 8}
-show_acs1_cat_density_by_puma("fam_incpov_ratio_cat_mix", "Income-to-Poverty Ratio, with Detail Below 100% FPL")
-```
-
-```{r examine PUMA-level counts for combo of work eligibility and poverty, fig.height = 12}
-# /!\ Some of these categories are quite thin: either zero or very low counts.
-# While that can be okay for the purposes of the SAE (and we do check our results below 
-# for whether we can meaningfully capture variation), the counts here are arguably 
-# too thin for us to consider inflating our tract-level SAE estimated counts to
-# equal the corresponding PUMA-level counts, given how much sample variation there
-# presumably would be.
-
-show_acs1_cat_density_by_puma("work_incpov_mix", 
-                                glue("Combo of Family Work Eligibility for CCDF and Income-to-Poverty Aligned with the\nCCDF Threshold of {local_ccdf_incratio_base}% FPL"))
-```
-
 ### Examine pattern contrasts between ACS1 and ACS5 measures
 
-ACS1 data are naturally less variable than ACS5 because they reflect averages up to the PUMA level. Thus, the red line below has "density" to the left of the blue peak, and a longer trail of high values at the right. Those reflect tracts with values of poverty that are respectively lower and higher than the overall range of PUMA-level values.
-
-The orange line--representing PUMA-level aggregates of the ACS5 data--is closer to the blue in the overall distribution. However, the fact that the blue line is slightly shifted left captures the fact that PUMA-level poverty rates for young children in `r base_year` are slightly lower than those in prior years.
-
 ```{r compare the distribution of values}
+# ACS1 data are naturally less variable than ACS5 because they reflect averages 
+# up to the PUMA level. Thus, the red line below has "density" to the left of the 
+# blue peak, and a longer trail of high values at the right. Those reflect tracts
+# with values of poverty that are respectively lower and higher than the overall 
+# range of PUMA-level values.
+# 
+# The orange line--representing PUMA-level aggregates of the ACS5 data--is closer 
+# to the blue in the overall distribution. However, the fact that the blue line 
+# is slightly shifted left captures the fact that PUMA-level poverty rates for 
+# young children in `r base_year` are slightly lower than those in prior years.
+
+acs1_puma_stats <- 
+  acs1_elig %>% 
+  filter(
+    AGEP %in% 18:64
+  )
+  summarize(
+    .by = puma,
+    pct_pov = sum(PWGTP[fam_incpov_ratio <= 1]) / sum(PWGTP)
+  )
+  
+  acs5puma <- 
+    acs5tract %>% 
+    merge(
+      geo_crosswalk %>% select(GEOID, PUMA) %>% unique(),
+      by = "GEOID"
+    ) %>% 
+    summarize(
+      .by = PUMA,
+      rIncPov0to100_Age18to64 = sum(nIncPov0to100_Age18to64) / sum(wIncPov0to100_Age18to64)
+    )
+
 ggplot() +
-  geom_density(data = acs1_puma_stats,
-               aes(x = pct_pov),
-               color = "blue") +
-  geom_density(data = acs5tract,
-               aes(x = incpov_lt6_r0to100_est),
-               color = "red") +
-  geom_density(data = acs5puma,
-               aes(x = incpov_lt6_r0to100_est),
-               color = "orange") +
-  scale_x_continuous(labels = percent) + 
-  labs(title = "Comparing Distributions of Poverty Rates for Children Under 6",
-       subtitle = glue("<span style='color:blue'>PUMA-level ACS1-year Data for {base_year}</span><br>",
-                       "<span style='color:red'>Tract-level ACS5-year Data for {acs5_year-4}-{acs5_year}</span><br>",
-                       "<span style='color:orange'>PUMA-level ACS5-year Data for {acs5_year-4}-{acs5_year}</span>"),
-       # 
-       # 
-       # subtitle = glue("ACS1 data reflects PUMA-level values for {base_year}\n",
-       #                 "ACS5 data reflects tract-level values for 2015-2019"),
-       x = "Poverty Rate for Children Under 6",
-       y = "Density of the Distribution") +
+  # geom_density(
+  #   data = acs1_puma_stats,
+  #   aes(x = pct_pov),
+  #   color = "blue"
+  # ) +
+  geom_density(
+    data = acs5tract,
+    aes(x = rIncPov0to100_Age18to64),
+    color = "red"
+  ) +
+  geom_density(
+    data = acs5puma,
+    aes(x = rIncPov0to100_Age18to64),
+    color = "orange"
+  ) +
+  scale_x_continuous(
+    labels = percent
+  ) + 
+  labs(
+    title = "Comparing Distributions of Poverty Rates for Individuals Aged 18-64",
+    subtitle = glue("<span style='color:blue'>PUMA-level ACS1-year Data for {base_year}</span><br>",
+                    "<span style='color:red'>Tract-level ACS5-year Data for {acs5_year-4}-{acs5_year}</span><br>",
+                    "<span style='color:orange'>PUMA-level ACS5-year Data for {acs5_year-4}-{acs5_year}</span>"),
+    # subtitle = glue("ACS1 data reflects PUMA-level values for {base_year}\n",
+    #                 "ACS5 data reflects tract-level values for 2015-2019"),
+    x = "Poverty Rate for Individuals Age 18-64",
+    y = "Density of the Distribution"
+  ) +
   theme_minimal() +
-  theme(plot.subtitle = element_markdown(lineheight = 1.1))
+  theme(
+    plot.subtitle = element_markdown(lineheight = 1.1)
+  )
 ```
 
-
-<!-- Note: Previous versions of this code explored the proportions of sample
-falling in combinations of other categorical buckets, including education or
-race/ethnicity of the head of household, and the "vulnerability" of the HOH
-industry of employment. Much of this was early in code development, and at times
-surrounding the COVID-19 pandemic when things like socioeconomic status and 
-industry of employment was particularly significant.
-
-That descriptive exploration can be seen as of the following commit of this file
-at:
-https://github.com/chapinhall/elpep/blob/be808bdf9b99087b528580e510abc759c06a40a4/run--02a--run-and-validate-SAE.Rmd
-
--->
 
 ### Results of SAE Estimation
 
@@ -164,9 +180,7 @@ https://github.com/chapinhall/elpep/blob/be808bdf9b99087b528580e510abc759c06a40a
 # the output, and since the ACS1 categories are how the SAE estimates are divided,
 # it's useful to build comparisons if there is alignment.
 
-incpov_spec_field_mix <- "fam_incpov_ratio_cat_mix"   
-incpov_spec_field_100 <- "fam_incpov_ratio_cat_by100"
-incpov_ref_value  <- "0%-50%"  # "0%-100%"
+incpov_ref_value  <- "0%-75%"  # "0%-100%"
 incpov_ranges_for_estimation <- c("0to50", "50to100", "100to199", "200to299")
 
 # For the sake of building comparisons of SAE estimates, and "now"-cast estimates, 
@@ -181,105 +195,111 @@ incpov_ranges_for_estimation <- c("0to50", "50to100", "100to199", "200to299")
 # Our current specification of `work_incpov_mix` embeds this alignment 
 # by adding the income threshold directly, in addition to the 100% for Head Start
 
+# /!\ GKFF -- need to supply multiple of these
 work_incpov_spec_field <- "work_incpov_mix"
 
 ```
 
 
 ```{r set specifications for sae}
-# /!\ Consider adding race/ethnicity and industry of workers
-sae_controls_simple_05 <- 
-  paste0("incpov_lt6_r", incpov_ranges_for_estimation, "_est")
 
-sae_controls_simple_612 <- 
-  paste0("incpov_6to11_r", incpov_ranges_for_estimation, "_est")
+# /!\ GKFF -- update specifications with new 01d measures
 
-sae_extra_controls <- 
-  c(paste0(c("f_lesshs", "m_lesshs", "f_hsgrad", "m_hsgrad", "f_somecoll", "m_somecoll", # This is omitting `f_coll` and `m_coll`
-             "pctMale_noSp", "pctFemale_noSp",                                           # This is omitting `pctMarried`
-             "employrate_m_a2534", "employrate_f_a2534", "lfrate_m_a2534", "lfrate_f_a2534"), 
-           "_est"))
+sae_controls_incpov_stems <- 
+  c(
+    "rIncPov0to50",
+    "rIncPov50to100",
+    "rIncPov100to199",
+    "rIncPov200to299",
+    "rIncPov300to399",
+    "rIncPov400plus"
+  )
 
-sae_controls_added_2534_05 <- 
-  c(sae_controls_simple_05, sae_extra_controls)
+# /!\ GKFF -- 0-6 and 6-17 is not yet aggregate
+# /!\ This may not line up directly given limitations of reporting in ACS5 income-
+# to-poverty by age tables
+sae_controls_incpov_Age0to19 <-
+  paste0(sae_controls_incpov_stems, "_Age0to17")
 
-sae_controls_added_2534_612 <- 
-  c(sae_controls_simple_612, sae_extra_controls)
+sae_controls_incpov_Age20to64 <- 
+  paste0(sae_controls_incpov_stems, "_Age18to64")
+
+sae_controls_incpov_Age65plus <- 
+  paste0(sae_controls_incpov_stems, "_Age65plus")
+
+sae_controls_ed <- 
+  c("rEdLtHs", "rEdSomeColl", "rEdAssoc", "rEdColl", "rEdGrad") # reference: "rEdHs"
+
+sae_controls_workstatus <- 
+  c("rEmpl_Male", "rEmpl_Female",
+    "rUnmarriedFemaleHh", "rUnmarriedMaleHh") # reference: "rMarried", 
+
+sae_controls_019_inc        <- c(sae_controls_incpov_Age0to19, sae_controls_ed)
+sae_controls_019_incwork    <- c(sae_controls_incpov_Age0to19, sae_controls_ed, sae_controls_workstatus)
+
+sae_controls_2064_inc       <- c(sae_controls_incpov_Age20to64, sae_controls_ed)
+sae_controls_2064_incwork   <- c(sae_controls_incpov_Age20to64, sae_controls_ed, sae_controls_workstatus)
+
+sae_controls_65plus_inc     <- c(sae_controls_incpov_Age65plus, sae_controls_ed)
+sae_controls_65plus_incwork <- c(sae_controls_incpov_Age65plus, sae_controls_ed, sae_controls_workstatus)
+
+stopifnot(all(c(sae_controls_inc, sae_controls_incwork) %in% colnames(acs5tract)))
+
 ```
 
-```{r subset data for the SAE}
-acs1_child[j = PUMA := str_pad(PUMA, width = 5, side = "left", pad = "0")]
-stopifnot(all(geo_crosswalk$PUMA %in% acs1_child$PUMA))
+```{r subset acs1 and acs5 data for the SAE}
+acs1_elig[j = PUMA := str_pad(PUMA, width = 5, side = "left", pad = "0")]
+stopifnot(all(geo_crosswalk$PUMA %in% acs1_elig$PUMA))
 
-acs1_child05_sae <- 
-  acs1_child[between(AGEP, 0, 5)]
-
-acs1_child612_sae <- 
-  acs1_child[between(AGEP, 6, 12)]
+acs1_elig019_sae    <- filter(acs1_elig, between(AGEP,  0, 19))
+acs1_elig2064_sae   <- filter(acs1_elig, between(AGEP, 20, 64))
+acs1_elig65plus_sae <- filter(acs1_elig, AGEP >= 65)
 
 acs5tract_sae <- acs5tract
 
 # If a specific county has been specified, subset data to it
 if (exists("my_county_fip")) {
-  acs1_child05_sae <- 
-    acs1_child05_sae %>% 
-    .[j = in_my_geo := 1*(PUMA %in% geo_crosswalk[COUNTYFIP == my_county_fip]$PUMA)] %>% 
-    .[in_my_geo == 1]
+  my_pumas <- 
+    geo_crosswalk %>% 
+    filter(
+      COUNTYFIP == my_county_fip
+    ) %>% 
+    pull(PUMA) %>% 
+    unique()
   
-  acs1_child612_sae <- 
-    acs1_child612_sae %>% 
-    .[j = in_my_geo := 1*(PUMA %in% geo_crosswalk[COUNTYFIP == my_county_fip]$PUMA)] %>% 
-    .[in_my_geo == 1]
+  acs1_elig019_sae    <- filter(acs1_elig019_sae,    PUMA %in% my_pumas)
+  acs1_elig2064_sae   <- filter(acs1_elig2064_sae,   PUMA %in% my_pumas)
+  acs1_elig65plus_sae <- filter(acs1_elig65plus_sae, PUMA %in% my_pumas)
   
-  acs5tract_sae <- 
-    acs5tract_sae %>% 
-    .[COUNTYFIP == my_county_fip]
+  acs5tract_sae <- filter(acs5tract_sae, COUNTYFIP == my_county_fip)
 }
 
 ```
 
-```{r implement small acs5year cleanup}
-# /!\ Consider moving this to the `1d` script
-# Replace NAs of 25-34 year old employment stats with equivalent statistics across ages
-a2534_vars <- str_subset(cn(acs5tract_sae), "2534")
-acs5tract_sae[j = c(a2534_vars) := 
-                 lapply(a2534_vars, function(x) ifelse(is.na(get(x)), get(str_replace(x, "_a2534", "")), get(x)))]
-```
-
-```{r bring in base year population estimates to replace those in the acs 5-year}
+```{r bring in calibrated base year population estimates}
 # Select specific age ranges of interest
 pop_by_age_base <- 
-  pop_by_age %>% 
+  pop_age_t_calib_wide %>% 
   filter(year == base_year) %>% 
   # Rename population values to avoid conflict with equivalent ACS5 counts, which
   # are for the prior 5 year period, not estimated for the base year as these are
-  select(GEOID = GEOID_TR20, 
-          age_0to5_count_base =  age_0to5_count, 
-         age_6to12_count_base = age_6to12_count)
+  select(GEOID, nAge0to19 = nAge0to19, nAge20to64, nAge65plus)
 
 # Merge to the ACS5-year data
 acs5tract_sae_counts <- 
   acs5tract_sae %>% 
-  merge(pop_by_age_base,
-        by = "GEOID",
-        all.x = TRUE) %>% 
+  merge(
+    pop_by_age_base,
+    by = "GEOID",
+    all.x = TRUE
+  ) %>% 
   # /!\ These are placeholder values, which of course improperly assume that the
   # base-year estimates are perfectly precise. This must be replaced when possible.
-  mutate( age_0to5_count_se_base = 0,
-         age_6to12_count_se_base = 0)
+  mutate(
+     nAge0to19_se = 0,
+    nAge20to64_se = 0,
+    nAge64plus_se = 0)
 
-# Compare ACS and 2020 counts
-ggplot(acs5tract_sae_counts,
-       aes(x = age_0to5_count,
-           y = age_0to5_count_base)) +
-  geom_point() + 
-  geom_abline(color = "red") +
-  labs(title = "Comparison of Tract-level Counts of Children Aged 0-5",
-       x = "ACS 5-Year",
-       y = glue("Estimate for Base Year ({base_year})")) +
-  theme_minimal()
-  # /!\ There are some highly off-axis values. Check these out, and/or convert to
-  # ggplotly to allow for inspection
 ```
 
 ```{r establish function to run SAE method}
@@ -290,21 +310,24 @@ run_saes_byCtrls <- function(vul_vars, sae_input_data, my_controls) {
   # deparse(substitute(sae_input_data)) to get the character input from the
   # function call, but that approach wouldn't work from the parallelized 
   # function calls
-  if (identical(sae_input_data, acs1_child05_sae)) {
-    pop_n_var    <- "age_0to5_count_base"    # "age_0to5_count" would be the alternative, from ACS5 data
-    pop_n_se_var <- "age_0to5_count_se_base" # "age_0to5_se"    would be the alternative, from ACS5 data
-  } else if (identical(sae_input_data, acs1_child612_sae)) {
-    pop_n_var    <- "age_6to12_count_base"    # "age_6to12_count" would be the alternative, from ACS5 data
-    pop_n_se_var <- "age_6to12_count_se_base" # "age_6to12_se"    would be the alternative, from ACS5 data
-  }
-  #browser() 
-  run_sae_combos(vul_vars       = vul_vars,
-                 sae_input_data = sae_input_data,
-                 sae_controls   = my_controls,
-                 aux_data       = acs5tract_sae_counts,
-                 aux_n_var      = pop_n_var,
-                 aux_n_se_var   = pop_n_se_var,
-                 verbose = TRUE)
+  
+  pop_n_var <- 
+    case_when(
+      identical(sae_input_data, acs1_elig019_sae)    ~ "nAge0to19",
+      identical(sae_input_data, acs1_elig2064_sae)   ~ "nAge20to64",
+      identical(sae_input_data, acs1_elig65plus_sae) ~ "nAge65plus",
+    )
+  pop_n_se_var <- glue("{pop_n_var}_se")
+   
+  run_sae_combos(
+    vul_vars       = vul_vars,
+    sae_input_data = sae_input_data,
+    sae_controls   = my_controls,
+    aux_data       = acs5tract_sae_counts,
+    aux_n_var      = pop_n_var,
+    aux_n_se_var   = pop_n_se_var,
+    verbose = TRUE
+  )
 }
 ```
 
@@ -313,18 +336,21 @@ run_saes_byCtrls <- function(vul_vars, sae_input_data, my_controls) {
 
 parallelize_sae <- TRUE
 
+inc_cat_field     <- "cFam_incpov_ratio_cat_with130"
+incwork_cat_field <- "cWork_incpov_status130"
+
 if (parallelize_sae) {
   
   runlist <- 
-    list(sae_results_incpov_simple_05     = list(incpov_spec_field_mix,  acs1_child05_sae,  sae_controls_simple_05),
-         sae_results_incpov_simple_612    = list(incpov_spec_field_mix,  acs1_child612_sae, sae_controls_simple_612),
-         sae_results_incpov_ctrls_mix_05  = list(incpov_spec_field_mix,  acs1_child05_sae,  sae_controls_added_2534_05),
-         sae_results_incpov_ctrls_mix_612 = list(incpov_spec_field_mix,  acs1_child612_sae, sae_controls_added_2534_612),
-         sae_results_incpov_ctrls_100_05  = list(incpov_spec_field_100,  acs1_child05_sae,  sae_controls_added_2534_05),
-         sae_results_incpov_ctrls_100_612 = list(incpov_spec_field_100,  acs1_child612_sae, sae_controls_added_2534_612),
-         sae_results_ccdf_wk_pov_05       = list(work_incpov_spec_field, acs1_child05_sae,  sae_controls_added_2534_05),
-         sae_results_ccdf_wk_pov_612      = list(work_incpov_spec_field, acs1_child612_sae, sae_controls_added_2534_612),
-         sae_results_ccdf_wk_sp_05        = list("work_spouse_status",   acs1_child05_sae,  sae_controls_added_2534_05))
+    list(
+      sae_results_inc_019    = list(inc_cat_field, acs1_elig019_sae,    sae_controls_019_inc),
+      sae_results_inc_2064   = list(inc_cat_field, acs1_elig2064_sae,   sae_controls_2064_inc),
+      sae_results_incwork_65 = list(inc_cat_field, acs1_elig65plus_sae, sae_controls_65plus_inc),
+      
+      sae_results_incwork_019    = list(incwork_cat_field, acs1_elig019_sae,    sae_controls_019_incwork),
+      sae_results_incwork_2064   = list(incwork_cat_field, acs1_elig2064_sae,   sae_controls_2064_incwork),
+      sae_results_incwork_65 = list(incwork_cat_field, acs1_elig65plus_sae, sae_controls_65plus_incwork),
+    )
   
   # Code to recruit (almost) as many core processors as are available (but not more than we need)
   cores <- detectCores() - 1 # not to overload your computer
@@ -335,56 +361,66 @@ if (parallelize_sae) {
   sae_results <- foreach (r = seq_along(runlist)) %dopar% {
     source("settings--main.R")
     
-    run_saes_byCtrls(runlist[[r]][[1]], 
-                     runlist[[r]][[2]],
-                     runlist[[r]][[3]])
+    run_saes_byCtrls(
+      runlist[[r]][[1]], 
+      runlist[[r]][[2]],
+      runlist[[r]][[3]]
+    )
   }
   stopCluster(cl)
   
   # Separate parallelized results to conform to downstream code
-  # /!\ Note: arguably, it'd be wise to update the downstream code to conform
-  # to the list format output by parallelization
   for (r in seq_along(sae_results)) {
-    assign(names(runlist)[r],
-           sae_results[[r]])
+    assign(
+      names(runlist)[r],
+      sae_results[[r]]
+    )
   }
   
 } else {
-  sae_results_incpov_simple_05     <- run_saes_byCtrls(incpov_spec_field_mix,  acs1_child05_sae,  sae_controls_simple_05)
-  sae_results_incpov_simple_612    <- run_saes_byCtrls(incpov_spec_field_mix,  acs1_child612_sae, sae_controls_simple_612)
-  sae_results_incpov_ctrls_mix_05  <- run_saes_byCtrls(incpov_spec_field_mix,  acs1_child05_sae,  sae_controls_added_2534_05)
-  sae_results_incpov_ctrls_mix_612 <- run_saes_byCtrls(incpov_spec_field_mix,  acs1_child612_sae, sae_controls_added_2534_612)
-  sae_results_incpov_ctrls_100_05  <- run_saes_byCtrls(incpov_spec_field_100,  acs1_child05_sae,  sae_controls_added_2534_05)
-  sae_results_incpov_ctrls_100_612 <- run_saes_byCtrls(incpov_spec_field_100,  acs1_child612_sae, sae_controls_added_2534_612)
-  sae_results_ccdf_wk_pov_05       <- run_saes_byCtrls(work_incpov_spec_field, acs1_child05_sae,  sae_controls_added_2534_05)
-  sae_results_ccdf_wk_pov_12       <- run_saes_byCtrls(work_incpov_spec_field, acs1_child612_sae, sae_controls_added_2534_612)
-  sae_results_ccdf_wk_sp_05        <- run_saes_byCtrls("work_spouse_status",   acs1_child05_sae,  sae_controls_added_2534_05)
+  
+  sae_results_inc_019    = run_saes_byCtrls(inc_cat_field, acs1_elig019_sae,    sae_controls_019_inc)
+  sae_results_inc_2064   = run_saes_byCtrls(inc_cat_field, acs1_elig2064_sae,   sae_controls_2064_inc)
+  sae_results_incwork_65 = run_saes_byCtrls(inc_cat_field, acs1_elig65plus_sae, sae_controls_65plus_inc)
+  
+  sae_results_incwork_019  = run_saes_byCtrls(incwork_cat_field, acs1_elig019_sae,    sae_controls_019_incwork)
+  sae_results_incwork_2064 = run_saes_byCtrls(incwork_cat_field, acs1_elig2064_sae,   sae_controls_2064_incwork)
+  sae_results_incwork_65   = run_saes_byCtrls(incwork_cat_field, acs1_elig65plus_sae, sae_controls_65plus_incwork)
+  
 }
 
-specs <- c("incpov_simple_05", 
-           "incpov_simple_612",
-           "incpov_ctrls_mix_05",
-           "incpov_ctrls_mix_612",
-           "incpov_ctrls_100_05",
-           "incpov_ctrls_100_612",
-           "ccdf_wk_sp_05",
-           "ccdf_wk_pov_05",
-           "ccdf_wk_pov_612") 
+specs <- 
+  c(
+    "sae_results_inc_019", 
+    "sae_results_inc_2064",
+    "sae_results_inc_65",
+    
+    "sae_results_incwork_019",
+    "sae_results_incwork_2064",
+    "sae_results_incwork_65"
+  ) 
 
 ```
 
 ```{r}
 # Organize contents
 sae_aux_data_acs5 <- acs5tract_sae
-sae_controls_list <- list(sae_controls_simple_05,
-                          sae_controls_simple_612,
-                          sae_controls_added_2534_05,
-                          sae_controls_added_2534_612)
+sae_controls_list <- 
+  list(
+    sae_controls_019_inc,
+    sae_controls_2064_inc,
+    sae_controls_65plus_inc,
+    sae_controls_019_incwork,
+    sae_controls_2064_incwork,
+    sae_controls_65plus_incwork
+  )
 results <- paste0("sae_results_", specs)
 
 # Save the bundle of objects
-save(list = c(results, "specs", "incpov_ref_value", "sae_controls_list", "sae_aux_data_acs5"),
-     file = glue("{output_path}sae_sensitivity_estimates_interim_{my_output_tag}.Rda"))
+save(
+  list = c(results, specs, incpov_ref_value, sae_controls_list, sae_aux_data_acs5),
+  file = glue("{output_path}sae_sensitivity_estimates_interim_{my_output_tag}.Rda")
+)
 
 if (FALSE) {
   load(file = glue("{output_path}sae_sensitivity_estimates_interim_{my_output_tag}.Rda")) 
@@ -392,165 +428,6 @@ if (FALSE) {
 ```
 
 
-#### Compare Direct versus FH Output Estimates
-
-As a reality check, confirm that a single "direct" estimate applies to all tracts within each given PUMA. The result should be that there are all "0" numbers of duplicates. 
-
-```{r check that all tracts in each puma have the same direct estimate, eval = developer_mode}
-sae_results_incpov_simple_05$sae_out %>% 
-  group_by(vc_value, GEOID, PUMA) %>% 
-  summarize(ndups = n_distinct(share_direct) - 1) %>% 
-  with(table(ndups))
-```
-
-Here, we are looking to see generally how the "Fay-Herriot" method results, which are detailed down to the tract level, compared to the direct estimates, which are carried down from PUMA-level ACS 1-year estimates.
-
-```{r compare direct vs FH output - first spec}
-sae_results_incpov_simple_05[["comp_viz"]] +
-  labs(x = "Direct Share Estimate",
-       y = "Fay-Herriott Share Estimates (Simple Spec)") +
-  theme(legend.position = "none")
-```
-
-```{r compare direct vs FH output - second spec}
-sae_results_incpov_ctrls_mix_05[["comp_viz"]] +
-  labs(x = "Direct Share Estimate",
-       y = "Fay-Herriott Share Estimates (Full Spec)") +
-  theme(legend.position = "none")
-```
-
-```{r examine share of reliance on direct versus model}
-# Check our understanding of the fh() weight calculation
-display_lambda_wgt <- 
-  sae_results_incpov_ctrls_mix_05$sae_out %>% 
-  mutate(lambda_wgt_direct  = share_model_se^2 / (share_model_se^2 + share_direct_se^2),
-         implied_wgt_direct = (share_fh - share_model) / (share_direct - share_model))
-# %>% 
-#   merge(geo_crosswalk[j = .(GEOID, aux_geo_label)] %>% unique(),
-#         by = "GEOID", 
-#         all.x = TRUE)
-
-stopifnot(all(display_lambda_wgt[j = quantile(round(lambda_wgt_direct, 5) - round(implied_wgt_direct, 5),
-                                              na.rm = TRUE) == 0]))
-
-display_lambda_wgt_pov <- 
-  display_lambda_wgt %>% 
-  filter(vc_value == incpov_ref_value)
-
-ggplot(display_lambda_wgt_pov,
-       aes(x = reorder(GEOID, lambda_wgt_direct),
-           y = lambda_wgt_direct) # , color = aux_geo_label == "Cook") ... this would allow for coloring a given focal region
-       ) + 
-  geom_point() +
-  labs(title = case_when(my_output_tag == "IL" ~ "For Share Below Poverty, Weight on 'Direct', PUMA-Derived Estimates\nis Typically Zero",
-                         TRUE ~ ""),
-       x = "Tracts, Ordered by Lambda",
-       y = "% Weight Placed on Direct Estimate") +
-  scale_y_continuous(labels = percent,
-                     limits = c(0, 1.0)) +
-  # scale_color_manual(breaks = c(FALSE, TRUE),
-  #                    values = c("gray", "lightblue"),
-  #                    labels = c("Non-Cook", "Cook")) +
-  theme(axis.text.x = element_blank())
-
-ggplot(display_lambda_wgt_pov,
-       aes(x = reorder(GEOID, share_direct))) +
-  geom_point(aes(y = share_direct),
-             color = "lightblue") +
-  geom_point(aes(y = share_model),
-             color = "orange")
-
-ggplot(display_lambda_wgt,
-       aes(x = share_direct,
-           y = share_model)) +
-  geom_point(alpha = 0.1) +
-  geom_abline(color = "blue") +
-  facet_wrap(~ vc_value) +
-  labs(title = "Comparison of SAE Output -- Model-Estimated Share (y) vs Direct (x)") +
-  theme_minimal()
-  
-```
-
-How much do discrepancies between model and direct estimates exist across PUMAs?
-
-```{r}
-plot_by_ordered_puma <- 
-  sae_results_incpov_ctrls_mix_05$sae_out %>% 
-  as.data.table() %>% 
-  .[j = rank := rank(share_direct, ties.method = "random"), 
-    by = vc_value] %>% 
-  .[j = puma_by_rank := factor(PUMA, levels = unique(PUMA[order(rank)])),
-    by = vc_value]
-
-ggplot(plot_by_ordered_puma,
-       aes(x = puma_by_rank)) +
-    geom_point(aes(y = share_model),
-               color = "red",
-               alpha = 0.1) +
-    geom_point(aes(y = share_direct),
-               color = "blue",
-               alpha = 0.1) +
-    facet_wrap(~ vc_value,
-               scales = "free") +
-    theme_minimal()  +
-    theme(axis.text.x = element_text(angle = 90)) +
-  labs(title = 
-         str_wrap(case_when(my_output_tag == "Cook2022" ~ "Some PUMAs have Direct Estimates that Lie Significantly Outside of the Range of Model Estimates")))
-```
-
-Identify which PUMAs have the greatest discrepancies between direct and model estimates, especially for lower levels of income.
-
-```{r}
-sae_results_incpov_ctrls_mix_05$sae_out %>% 
-  group_by(vc_value, PUMA) %>% 
-  summarize(model_vs_direct_var = (sum((share_model - share_direct)^2)/n()) %>% round(3),
-            model_vs_direct_above = mean(share_model > share_direct) %>% percent(),
-            model_vs_direct_oneside = mean((share_model > share_direct)*(median(share_model) > share_direct)) %>% percent()) %>% 
-              # This checks for % of tracts on the same side as the median) 
-  filter(vc_value == "0%-50%") %>% 
-  datatable()
-
-```
-
-```{r examine differences in direct and model by geography}
-if (my_output_tag == "Cook2022") {
-  crosswalk_cpt <- 
-    read.csv(glue("H:/DFSS Community Assessment/Community Assessment/2020-2021 project year/program eligibility estimation/input/PUMA_Tract_CCA_equivalency2010.csv")) %>% 
-    data.table() %>% 
-    rename(COUNTYFIP = county, 
-           PUMA      = puma,
-           CCA       = cca,
-           TRACTFIP  = tract) %>% 
-    mutate(TRACTFIP = str_pad(TRACTFIP, width = 6, side = "left", pad = "0"),
-           GEOID = paste0("17031", TRACTFIP))
-
-  aug_sae_out <- 
-    sae_results_incpov_ctrls_mix_05_out %>% 
-    merge(crosswalk_cpt %>% select(GEOID, CCA) %>% unique(),
-          by = "GEOID",
-          all.x = TRUE) 
-  
-  # Plot by PUMA on x-axis
-  ggplot(aug_sae_out %>% .[order(share_direct)] %>% .[j = rank := 1:.N] %>% .[!is.na(CCA)],
-         aes(x = factor(PUMA))) +
-    geom_point(data = aug_sae_out[CCA != 54],
-               aes(y = share_model),
-               color = "red",
-               alpha = 0.1) + # CCA == 54 is Riverdale
-    geom_point(data = aug_sae_out[CCA == 54],
-               aes(y = share_model),
-               color = "black") + # CCA == 54 is Riverdale
-    geom_point(aes(y = share_direct),
-               color = "blue",
-               alpha = 0.1) +
-    facet_wrap(~ vc_value) +
-    # scale_color_manual(breaks = c(F, T),
-    #                    values = c("red", "black")) +
-    theme_minimal()  +
-    theme(axis.text.x = element_text(angle = 90))
-  
-}
-```
 
 
 #### Examine the Estimated Composition of Tracts
@@ -558,49 +435,73 @@ if (my_output_tag == "Cook2022") {
 ```{r examine SAE share composition by tract -- FH estimates}
 plot_sae_comp_by_tract <- function(sae_est, base_cat, title) {
   
-  tract_order <- sae_est[vc_value == base_cat] %>% as.data.table() %>% .[order(-share_fh_trunc)] %>%  .[j = rank := 1:.N]
+  tract_order <- 
+    sae_est %>% 
+    filter(vc_value == base_cat) %>% 
+    arrange(-share_fh_trunc) %>%  
+    mutate(
+      rank := 1:n()
+    )
   
-  ggplot(sae_est %>% merge(tract_order[, .(GEOID, rank)], by = "GEOID"),
-         aes(x = reorder(GEOID, rank),
-             y = share_fh_trunc,
-             color = vc_value)) +
-    geom_point(alpha = 0.3) +
-    geom_hline(yintercept = 0) +
-    scale_y_continuous(labels = percent) +
-    scale_color_discrete(name = "Vulnerability Category") +
-    labs(title = title,
-         x = glue("Tracts, in order of pop'n share in {base_cat}"),
-         y = "SAE estimated share") +
-    theme(axis.text.x = element_blank()) 
+  sae_est %>% 
+    merge(
+      select(tract_order, GEOID, rank), 
+      by = "GEOID"
+    ) %>% 
+    ggplot() +
+    aes(
+      x = reorder(GEOID, rank),
+      y = share_fh_trunc,
+      color = vc_value) +
+    geom_point(
+      alpha = 0.3
+    ) +
+    geom_hline(
+      yintercept = 0
+    ) +
+    scale_y_continuous(
+      labels = percent
+    ) +
+    scale_color_discrete(
+      name = "Vulnerability Category"
+    ) +
+    labs(
+      title = title,
+      x = glue("Tracts, in order of pop'n share in {base_cat}"),
+      y = "SAE estimated share"
+    ) +
+    theme(
+      axis.text.x = element_blank()
+    )
 }
 ```
 
-<!-- Below, the smoothness of the "simple" method suggests ... -->
 
 ```{r}
-# /!\ Consider ways to display them in a grid.
-# /!\ Consider how to loop or sapply this, to be more compact
-plot_sae_comp_by_tract(sae_results_incpov_simple_05$sae_out,  
-                       base_cat = incpov_ref_value,
-                       title = "Vulnerability Cat Composition by Tract -- Simple Spec")
-plot_sae_comp_by_tract(sae_results_incpov_ctrls_mix_05$sae_out,   
-                       base_cat = incpov_ref_value, 
-                       title = "Vulnerability Cat Composition by Tract -- Added Controls (2534)")
+plot_sae_comp_by_tract(
+  sae_controls_019_inc$sae_out,  
+  base_cat = incpov_ref_value,
+  title = "Base Income Cat Composition by Tract -- Ages 0-19"
+  )
 
-plot_sae_comp_by_tract(sae_results_ccdf_wk_sp_05$sae_out,   
-                       base_cat = "WorkElig_SpousePresent", 
-                       title = "Vulnerability Cat Composition by Tract -- Work Eligibility by Presence of Spouse")
+plot_sae_comp_by_tract(
+  sae_controls_2064_inc$sae_out,   
+  base_cat = incpov_ref_value, 
+  title = "Base Income Cat Composition by Tract -- Ages 20-64")
 
-plot_sae_comp_by_tract(sae_results_ccdf_wk_pov_05$sae_out,   
-                       base_cat = str_subset(sae_results_ccdf_wk_pov_05$sae_out$vc_value, "^WorkElig_0%") %>% unique(), 
-                       title = "Vulnerability Cat Composition by Tract -- Work Eligibility by Income-to-Pov")
+plot_sae_comp_by_tract(
+  sae_controls_019_inc$sae_out,   
+  base_cat = "WorkEligThresh_0-75%", # /!\ Need to fix directly 
+  title = "Income-by-Work Cat Composition by Tract -- Ages 0-19"
+)
+
+plot_sae_comp_by_tract(
+  sae_controls_2064_inc$sae_out,   
+  base_cat = "WorkEligThresh_0-75%", # /!\ Need to fix directly 
+  title = "Income-by-Work Cat Composition by Tract -- Ages 20-64")
 ```
 
 #### Examine Aggregate Comparison Plots
-
-Because PUMA data are very thin, we will not adjust our tract-level estimates to match their totals. Instead, we will just compare them to get a rough sense of correspondence.
-
-However, it seems that the addition of detailed controls has improved alignment of the estimated measures with the ACS.
 
 ```{r compare sums of estimates to PUMA-level with observed PUMA values -- simple vs extended controls, results = "asis"}
 # for (spec in specs) {
@@ -608,137 +509,61 @@ However, it seems that the addition of detailed controls has improved alignment 
 #     print()
 # }
 
-if (str_detect(my_output_tag, "Cook2023")) {
-  cat("Controls set makes a small difference in PUMA-level aggregate comparisons.")
-}
+sae_controls_2064_inc[["agg_comp_fh"]]$agg_comp_plot +
+  labs(
+    title = "PUMA-level SAE Estimates vs ACS1 Counts",
+    subtitle = "Inc-to-Pov, Ages 20-64, FH Estimates",
+    x = "Observed ACS 1-year Counts"
+  ) 
 
-sae_results_incpov_simple_05[["agg_comp_fh"]]$agg_comp_plot +
-  labs(title = "PUMA-level SAE Estimates vs ACS1 Counts",
-       subtitle = "Inc-to-Pov, Simple Ctrls, FH-based Est, Ages 0-5",
-       x = "Observed ACS 1-year Counts") 
+sae_controls_2064_inc[["agg_comp_model"]]$agg_comp_plot +
+  labs(
+    title = "PUMA-level SAE Estimates vs ACS1 Counts",
+    subtitle = "Inc-to-Pov, Ages 20-64, Model Estimates",
+    x = "Observed ACS 1-year Counts"
+  ) 
 
-sae_results_incpov_ctrls_mix_05[["agg_comp_fh"]]$agg_comp_plot +
-  labs(title = "PUMA-level SAE Estimates vs ACS1 Counts",
-       subtitle = "Inc-to-Pov, Extended Ctrls, FH-based Est, Ages 0-5",
-       x = "Observed ACS 1-year Counts") 
+sae_controls_2064_incwork[["agg_comp_fh"]]$agg_comp_plot +
+  labs(
+    title = "PUMA-level SAE Estimates vs ACS1 Counts",
+    subtitle = "Inc-to-Pov and Work, Ages 20-64, FH Estimates",
+    x = "Observed ACS 1-year Counts"
+  ) 
+
+sae_controls_2064_incwork[["agg_comp_model"]]$agg_comp_plot +
+  labs(
+    title = "PUMA-level SAE Estimates vs ACS1 Counts",
+    subtitle = "Inc-to-Pov and Work, Ages 20-64, Model Estimates",
+    x = "Observed ACS 1-year Counts"
+  ) 
+
 
 ```
 
-
-```{r compare sums of estimates to PUMA-level with observed PUMA values -- FH versus model}
-if (str_detect(my_output_tag, "Cook2023")) {
-  cat("Use of model-based versus full Fay-Herriott estimates makes a difference, and are arguably worse at fitting PUMA-level aggregates. That's expected, since that the FH estimates use shrinkage to bring estimates closer to PUMA-level averages. Also, use of the model-based estimates reflects a tradeoff of respecting spatial heterogeneity as genuine rather than as outliers.")
-}
-
-sae_results_incpov_ctrls_mix_05[["agg_comp_fh"]]$agg_comp_plot +
-  labs(title = "PUMA-level SAE Estimates vs ACS1 Counts",
-       subtitle = "Inc-to-Pov, Extended Ctrls, FH-based Est, Ages 0-5",
-       x = "Observed ACS 1-year Counts")
-
-sae_results_incpov_ctrls_mix_05[["agg_comp_model"]]$agg_comp_plot +
-  labs(title = "PUMA-level SAE Estimates vs ACS1 Counts",
-       subtitle = "Inc-to-Pov, Extended Ctrls, Model-based Est, Ages 0-5",
-       x = "Observed ACS 1-year Counts")
-```
-
-
-```{r compare sums of estimates to PUMA-level with observed PUMA values -- incpov mix vs by 100s}
-if (str_detect(my_output_tag, "Cook2023")) {
-  cat("The mixed-interval estimates show that there are significant under-estimates of 50-100% FPL counts. This is perhaps unsurprising given that 50-100% is a relatively small target. Although it is as 'wide' as 0-50%, it does not have the density of households with very little actual or formal income that are near 0. Although this specification gives us an accurate (in aggregates) estimation of 0-50% FPL, the underestimate of 50-100% will cause underestimates of aggregate counts for any larger interval that includes them: <100% FPL, <200% FPL, etc., both as an input to the now-casting, as well as direct estimates of baseline year eligibility.\n\n The good news is that a specification of by-100s intervals is useful for getting 0-100% FPL counts right. The bottom line is that we can use a combination of these specifications as part of our now-casting and baseline calculations.")
-}
-
-sae_results_incpov_ctrls_mix_05[["agg_comp_fh"]]$agg_comp_plot +
-  labs(title = "PUMA-level SAE Estimates vs ACS1 Counts",
-       subtitle = "Inc-to-Pov (mixed intervals), Extended Ctrls, FH-based Est, Ages 0-5",
-       x = "Observed ACS 1-year Counts")
-
-sae_results_incpov_ctrls_100_05[["agg_comp_fh"]]$agg_comp_plot +
-  labs(title = "PUMA-level SAE Estimates vs ACS1 Counts",
-       subtitle = "Inc-to-Pov (by 100s), Extended Ctrls, FH-based Est, Ages 0-5",
-       x = "Observed ACS 1-year Counts")
-```
-
-
-```{r compare sums of estimates to PUMA-level with observed PUMA values -- 0-5 to 6-12}
-if (str_detect(my_output_tag, "Cook2023")) {
-  cat("The 6-12 aggregates seems to have more noise than 0-5, although they are more zoomed-in on smaller counts, and they seem to notably avoid the under-estimation of 50-100% FPL counts.")
-}
-
-sae_results_incpov_ctrls_mix_05[["agg_comp_fh"]]$agg_comp_plot +
-  labs(title = "PUMA-level SAE Estimates vs ACS1 Counts",
-       subtitle = "Inc-to-Pov, Extended Ctrls, FH-based Est, Ages 0-5",
-       x = "Observed ACS 1-year Counts") 
-
-sae_results_incpov_ctrls_mix_612[["agg_comp_fh"]]$agg_comp_plot +
-  labs(title = "PUMA-level SAE Estimates vs ACS1 Counts",
-       subtitle = "Inc-to-Pov, Extended Ctrls, FH-based Est, Ages 6-12",
-       x = "Observed ACS 1-year Counts")
-```
-
-
-```{r compare sums of estimates to PUMA-level with observed PUMA values -- CCAP -- FH vs model for ages 0-5}
-# Seems reasonably close especially for thicker--i.e. non 200-300-- groups.
-# However, it's (unsurprisingly) shading lower for poverty, which I think reflects
-# shrinking down to lower levels. Will want to see if that's addressed with 
-# better control sets.
-
-if (str_detect(my_output_tag, "Cook2023")) {
-  cat("FH vs Model estimates for CCAP estimates for youth aged 0-5 do not show much difference from each other. Both are particulately poor at estimating children in non-work eligible families with higher income, but these are categories that outside of policy interest.")
-}
-
-sae_results_ccdf_wk_pov_05[["agg_comp_fh"]]$agg_comp_plot +
-  labs(title = "PUMA-level SAE Estimates vs ACS1 Counts",
-       subtitle = "CCAP Elig Cats, Extended Ctrls, FH-based Est, Ages 0-5",
-       x = "Observed ACS 1-year Counts") +
-  theme(strip.text = element_text(size = 8),
-        axis.text  = element_text(size = 8))
-
-sae_results_ccdf_wk_pov_05[["agg_comp_model"]]$agg_comp_plot +
-  labs(title = "PUMA-level SAE Estimates vs ACS1 Counts",
-       subtitle = "CCAP Elig Cats, Extended Ctrls, Model-based Est, Ages 0-5",
-       x = "Observed ACS 1-year Counts") +
-  theme(strip.text = element_text(size = 8),
-        axis.text  = element_text(size = 8))
-```
-
-
-```{r compare sums of estimates to PUMA-level with observed PUMA values -- CCAP -- FH vs model for ages 6-12}
-if (str_detect(my_output_tag, "Cook2023")) {
-  cat("FH vs Model estimates for CCAP estimates for youth aged 0-5 do not show much difference from each other. Both are particulately poor at estimating children in non-work eligible families with higher income, but these are categories that outside of policy interest.")
-}
-
-sae_results_ccdf_wk_pov_612[["agg_comp_fh"]]$agg_comp_plot +
-  labs(title = "PUMA-level SAE Estimates vs ACS1 Counts",
-       subtitle = "CCAP Elig Cats, Extended Ctrls, FH-based Est, Ages 6-12",
-       x = "Observed ACS 1-year Counts") +
-  theme(strip.text = element_text(size = 8),
-        axis.text  = element_text(size = 8))
-
-sae_results_ccdf_wk_pov_612[["agg_comp_model"]]$agg_comp_plot +
-  labs(title = "PUMA-level SAE Estimates vs ACS1 Counts",
-       subtitle = "CCAP Elig Cats, Extended Ctrls, Model-based Est, Ages 6-12",
-       x = "Observed ACS 1-year Counts") +
-  theme(strip.text = element_text(size = 8),
-        axis.text  = element_text(size = 8))
-
-```
 
 ```{r compare correlations between puma-level observed and predicted values - fay herriot, eval = developer_mode}
-cbind(sae_results_incpov_simple_05[["agg_comp_fh"]]$agg_comp_cor     %>% mutate(simple_05     = round(V1, 3)) %>% select(-V1),
-      sae_results_incpov_simple_612[["agg_comp_fh"]]$agg_comp_cor    %>% mutate(simple_612    = round(V1, 3)) %>% select(simple_612),
-      sae_results_incpov_ctrls_mix_05[["agg_comp_fh"]]$agg_comp_cor  %>% mutate(ctrls_mix_05  = round(V1, 3)) %>% select(ctrls_mix_05),
-      sae_results_incpov_ctrls_100_05[["agg_comp_fh"]]$agg_comp_cor  %>% mutate(ctrls_100_05  = round(V1, 3)) %>% select(ctrls_100_05),
-      sae_results_incpov_ctrls_mix_612[["agg_comp_fh"]]$agg_comp_cor %>% mutate(ctrls_mix_612 = round(V1, 3)) %>% select(ctrls_mix_612)) %>% 
+r3 <- function(x) round(x, 3)
+cbind(
+  sae_controls_019_inc[["agg_comp_fh"]]$agg_comp_cor        %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
+  sae_controls_2064_inc[["agg_comp_fh"]]$agg_comp_cor       %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64),
+  sae_controls_65plus_inc[["agg_comp_fh"]]$agg_comp_cor     %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
+  sae_controls_019_incwork[["agg_comp_fh"]]$agg_comp_cor    %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
+  sae_controls_2064_incwork[["agg_comp_fh"]]$agg_comp_cor   %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64),
+  sae_controls_65plus_incwork[["agg_comp_fh"]]$agg_comp_cor %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
+) %>% 
   kable(caption = "Correlation of PUMA-level Observed and SAE Values from the Fay-Herriot Method")
 ```
 
 ```{r compare correlations between puma-level observed and predicted values - model, eval = developer_mode}
-cbind(sae_results_incpov_simple_05[["agg_comp_model"]]$agg_comp_cor     %>% mutate(simple_05     = round(V1, 3)) %>% select(-V1),
-      sae_results_incpov_simple_612[["agg_comp_model"]]$agg_comp_cor    %>% mutate(simple_612    = round(V1, 3)) %>% select(simple_612),
-      sae_results_incpov_ctrls_mix_05[["agg_comp_model"]]$agg_comp_cor  %>% mutate(ctrls_mix_05  = round(V1, 3)) %>% select(ctrls_mix_05),
-      sae_results_incpov_ctrls_100_05[["agg_comp_model"]]$agg_comp_cor  %>% mutate(ctrls_100_05  = round(V1, 3)) %>% select(ctrls_100_05),
-      sae_results_incpov_ctrls_mix_612[["agg_comp_model"]]$agg_comp_cor %>% mutate(ctrls_mix_612 = round(V1, 3)) %>% select(ctrls_mix_612)) %>% 
-  kable(caption = "Correlation of PUMA-level Observed and SAE Values from the Model-Only Method")
+cbind(
+  sae_controls_019_inc[["agg_comp_model"]]$agg_comp_cor        %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
+  sae_controls_2064_inc[["agg_comp_model"]]$agg_comp_cor       %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64),
+  sae_controls_65plus_inc[["agg_comp_model"]]$agg_comp_cor     %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
+  sae_controls_019_incwork[["agg_comp_model"]]$agg_comp_cor    %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
+  sae_controls_2064_incwork[["agg_comp_model"]]$agg_comp_cor   %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64),
+  sae_controls_65plus_incwork[["agg_comp_model"]]$agg_comp_cor %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
+) %>% 
+  kable(caption = "Correlation of PUMA-level Observed and SAE Values from the Fay-Herriot Method")
   # Note that these estimates will naturally be below those of the FH method, which blends the 
   # model estimates with the observe SAE values themselves
   # But also, in a sense, this is a cleaner perspective on the results of the model
@@ -751,71 +576,107 @@ Our non-canonical application of the SAE method requires several adjustments. Fi
 Second, because our model makes use of left-hand side quantities that have reduced variance, as PUMA-level aggregates rather than truly tract-level estimates, our SAE estimates become compressed. See below. 
 
 ```{r compare SAE estimate to acs5}
-compare_sae_lt100fpl <- function(sae_spec, title, xlab, ylab) {
+compare_sae_lt125fpl <- function(sae_spec, title, xlab, ylab) {
   
   # To handle the fact that different age runs of the SAE use different age-specific
   # income-to-poverty constructions, we remove the age-related part of the field name
-  old_incpov_names <- str_subset(cn(sae_spec), "incpov.+est")
-  new_incpov_names <- str_replace(old_incpov_names, "(incpov).+(_r.+_est)", "\\1\\2")
+  old_incpov_names <- str_subset(cn(sae_spec), "rIncPov.+")
+  new_incpov_names <- str_replace(old_incpov_names, "(rIncPov\\d+to\\d+)_Age.+", "\\1")
   
   comp_data <-
-    sae_spec[vc_value %in% c("0%-50%", "50%-100%", "0%-100%")] %>% 
-    setnames(old_incpov_names,
-             new_incpov_names) %>% 
-    mutate(incpov_r0to100_est = incpov_r0to50_est + incpov_r50to100_est) %>% 
-    select(GEOID, share_fh_trunc, incpov_r0to100_est) %>% 
-    group_by(GEOID) %>% 
-    # Sum across 0-50% and 50-100% FPL, within tract
-    summarize(share_fh_trunc = sum(share_fh_trunc),
-              incpov_r0to100_est = unique(incpov_r0to100_est)) %>% 
-    mutate(label = paste0("GEOID: ", GEOID))
+    sae_spec[vc_value %in% c("0-75%", "75-130%")] %>% 
+    setnames(
+      old_incpov_names,
+      new_incpov_names
+    ) %>% 
+    # Build up ACS5 measure for comparison
+    mutate(
+      rIncPov0to125 = rIncPov0to50 + rIncPov50to75 + rIncPov75to99 + rIncPov100to124
+    ) %>% 
+    select(GEOID, share_fh_trunc, rIncPov0to125) %>% 
+    # Sum across SAE estimates, within tract
+    summarize(
+      .by = GEOID,
+      share_fh_trunc = sum(share_fh_trunc),
+      rIncPov0to125  = unique(rIncPov0to125)
+    ) %>% 
+    mutate(
+      label = paste0("GEOID: ", GEOID)
+    )
   
-  rho <- with(comp_data, cor(share_fh_trunc, incpov_r0to100_est, use = "pairwise")) %>% round(2)
+  rho <- with(comp_data, cor(share_fh_trunc, rIncPov0to125, use = "pairwise")) %>% round(2)
   
   # If tracts within a specific auxiliary geography are of interest, merge that
   # information in and style the plotted points
   if ("my_aux_geo_focal_val" %in% objects()) {
     comp_data <- 
       comp_data %>% 
-      merge(geo_crosswalk[j = .(GEOID, aux_geo_label)] %>% unique(),
-          by = "GEOID",
-          all.x = TRUE)
+      merge(
+        select(geo_crosswalk, GEOID, aux_geo_label) %>% unique(),
+        by = "GEOID",
+        all.x = TRUE
+      )
+    
     plot_base <- 
-      ggplot(comp_data,
-             aes(x = incpov_r0to100_est,
-                 y = share_fh_trunc,
-                 #group = label,
-                 color = aux_geo_label == my_aux_geo_focal_val)) + 
-      scale_color_manual(breaks = c(FALSE, TRUE),
-                         values = c("gray", "blue"),
-                         labels = c(paste0("Non-", my_aux_geo_focal_val), 
-                                    my_aux_geo_focal_val))
+      comp_data %>% 
+      ggplot() +
+      aes(
+        x = rIncPov0to125,
+        y = share_fh_trunc,
+        #group = label,
+        color = aux_geo_label == my_aux_geo_focal_val
+      ) + 
+      scale_color_manual(
+        breaks = c(FALSE, TRUE),
+        values = c("gray", "blue"),
+        labels = c(paste0("Non-", my_aux_geo_focal_val), 
+                   my_aux_geo_focal_val)
+      )
   } else {
     plot_base <- 
-      ggplot(comp_data,
-             aes(x = incpov_r0to100_est,
-                 y = share_fh_trunc)) #,#group = label
+      comp_data %>% 
+      ggplot() +
+      aes(
+        x = incpov_r0to100_est,
+        y = share_fh_trunc
+      ) #,#group = label
   }
   
   # Generate the plot
-  sae_lt100fpl_comp_plot <- 
+  sae_lt125fpl_comp_plot <- 
     plot_base +
-    geom_point(alpha = 0.1) +
-    geom_abline(color = "red") +
-    geom_smooth(color = "blue") + 
-    scale_x_continuous(labels = percent) +
-    scale_y_continuous(labels = percent) +
-    labs(title = title,
-         x = xlab,
-         y = ylab) +
-    annotate("text", x = 0.1, 
-             y = 0.6, 
-             label = glue("rho = {rho}")) +
+    geom_point(
+      alpha = 0.1
+    ) +
+    geom_abline(
+      color = "red"
+    ) +
+    geom_smooth(
+      color = "blue"
+    ) + 
+    scale_x_continuous(
+      labels = percent
+    ) +
+    scale_y_continuous(
+      labels = percent
+    ) +
+    labs(
+      title = title,
+      x = xlab,
+      y = ylab
+    ) +
+    annotate(
+      "text", x = 0.1, 
+      y = 0.6, 
+      label = glue("rho = {rho}")
+    ) +
     theme_minimal() +
-    theme(legend.position = "none",
-          title = element_text(size = 10))
+    theme(
+      legend.position = "none",
+      title = element_text(size = 10)
+    )
   
-  sae_lt100fpl_comp_plot
+  sae_lt125fpl_comp_plot
   
   #ggplotly(sae_lt100fpl_comp_plot, tooltip = "group")
 }
@@ -850,55 +711,37 @@ compare_sae_lt100fpl <- function(sae_spec, title, xlab, ylab) {
 
 diagnostic_note <- 
   glue("NOTE: This comparison is not expected to show consistency, given\n",
-       "our expectation of the SAE method showing some compression")
+       "our expectation of the SAE method showing compression")
 
-compare_sae_lt100fpl(
-  sae_results_incpov_simple_05$sae_out,
-  title = case_when(my_output_tag == "IL"       ~ diagnostic_note,
-                    my_output_tag == "Cook2022" ~ diagnostic_note,
-                    TRUE ~ ""),
-  xlab = "Observed ACS 5-year Poverty Rate, Ages 0-5 -- Simple Spec",
-  ylab = "SAE Estimate of Poverty Rate, Age 0-5"
+acs5_compression_measure <- "Observed ACS 5-year Inc-to-Pov <130% FPL"
+sae_measure_label <- "SAE Estimate of Inc-to-Pov < 130% FPL"
+
+compare_sae_lt125fpl(
+  sae_controls_019_inc$sae_out,
+  title = diagnostic_note,
+  xlab = glue("{acs5_compression_measure}, Ages 0-19"),
+  ylab = glue("{sae_measure_label}, Age 0-19")
 ) +
   theme_minimal()
 
-compare_sae_lt100fpl(
-  sae_results_incpov_ctrls_mix_05$sae_out,
-  title = case_when(my_output_tag == "IL"       ~ diagnostic_note,
-                    my_output_tag == "Cook2022" ~ diagnostic_note,
-                    TRUE ~ ""),
-  xlab = "Observed ACS 5-year Poverty Rate, Ages 0-5 -- Rich Spec - Mixed Interval FPL",
-  ylab = "SAE Estimate of Poverty Rate, Ages 0-5"
+compare_sae_lt125fpl(
+  sae_controls_2064_inc$sae_out,
+  title = diagnostic_note,
+  xlab = glue("{acs5_compression_measure}, Ages 20-64"),
+  ylab = glue("{sae_measure_label}, Ages 20-64")
 ) +
   theme_minimal()
 
-compare_sae_lt100fpl(
-  sae_results_incpov_ctrls_100_05$sae_out,
-  title = case_when(my_output_tag == "IL"       ~ diagnostic_note,
-                    my_output_tag == "Cook2022" ~ diagnostic_note,
-                    TRUE ~ ""),
-  xlab = "Observed ACS 5-year Poverty Rate, Ages 0-5 -- Rich Spec - FPL by 100s",
-  ylab = "SAE Estimate of Poverty Rate, Ages 0-5"
+compare_sae_lt125fpl(
+  sae_controls_65plus_inc$sae_out,
+  title = diagnostic_note,
+  xlab = glue("{acs5_compression_measure}, Ages 65+"),
+  ylab = glue("{sae_measure_label}, Ages 65+")
 ) +
   theme_minimal()
 
-compare_sae_lt100fpl(
-  sae_results_incpov_ctrls_mix_612$sae_out,
-  title = case_when(my_output_tag == "IL"       ~ diagnostic_note,
-                    my_output_tag == "Cook2022" ~ diagnostic_note,
-                    TRUE ~ ""),
-  xlab = "Observed ACS 5-year Poverty Rate, Ages 6-12 -- Rich Spec - Mixed Interval FPL",
-  ylab = "SAE Estimate of Poverty Rate, Ages 6-12") +
-  theme_minimal()
 ```
 
-```{r investigate select outliers, eval = developer_mode}
-
-sae_results_incpov_ctrls_mix_05$sae_out %>%
-  .[GEOID %in% c("17031280900"),
-    .(GEOID, vc_value, share_direct, share_fh)] %>% 
-  .[order(GEOID, vc_value)]
-```
 
 Thus, we undertake a further adjustment, by:
 
@@ -907,24 +750,24 @@ Thus, we undertake a further adjustment, by:
 
 In this way, we anchor the distribution of our new estimates in the most reliable and most recent values that are available.
 
-```{r load acs5 measures relevant for aligning to sae categories}
-load(file = glue("{output_path}acs5_ccdf_{my_output_tag}.Rda"))
-```
-
 ```{r function to select relevant income-to-poverty measures}
 incpovs <- 
   acs5_incpov_byage$inc_to_pov_ratio %>% 
   unique() %>% 
   sort_by_char_nums() %>% 
   sort()
+
 incpov_bounds <- str_extract_all(incpovs, "\\d+")
+
 dfIncPovCutoffs <- 
-  data.frame(incpov = incpovs,
-             left  = sapply(incpov_bounds, function(x) x[1]) %>% as.numeric(),
-             right = sapply(incpov_bounds, function(x) x[2]) %>% as.numeric())
+  data.frame(
+    incpov = incpovs,
+    left  = sapply(incpov_bounds, function(x) x[1]) %>% as.numeric(),
+    right = sapply(incpov_bounds, function(x) x[2]) %>% as.numeric()
+  )
 
 get_closest <- function(val, ref) {
-  ref <- setdiff(ref, NA)
+  ref <- setdiff(ref, NA) # This addresses NAs in second value from e.g. "400plus"
   absdev <- abs(val - ref)
   ref[which(absdev == min(absdev))]
 }
@@ -948,7 +791,7 @@ if (FALSE) {
 }
 ```
 
-```{r notes for calculating ccdf eligibility below}
+```{r notes for calculating program eligibility below}
 # Because we do not know the joint distribution of these income- and work-eligibility
 # phenomena, we use microdata for some calibration. We use the phi calculation of
 # correlation for bernoulli random variables, which is just the pearson correlation.
@@ -976,11 +819,16 @@ make_acs5_equiv <- function(sae_ests, sae_age, verbose = FALSE) {
   
   # age for subsetting
   acs5_ages <- 
-    case_when(sae_age == "05"  ~ "Age0to6",
-              sae_age == "612" ~ "Age6to11")
+    case_when(
+      sae_age == "019"    ~ "Age0to17",
+      sae_age == "2064"   ~ "Age18to64"
+      sae_age == "65plus" ~ "Age65plus"
+    )
   acs1_ages <- 
-    case_when(sae_age == "05"  ~ c(0, 5),
-              sae_age == "612" ~ c(6, 12))
+    case_when(
+      sae_age == "05"  ~ c(0, 5),
+      sae_age == "612" ~ c(6, 12)
+    )
   
   acs5_ests <- NULL
   for (vc in vc_vals) {
@@ -996,15 +844,19 @@ make_acs5_equiv <- function(sae_ests, sae_age, verbose = FALSE) {
     incpov_cat_keep <- return_incpov_fields_bounds(incpov_left, incpov_right)
     acs5_incpov_vc <- 
       acs5_incpov_byage %>% 
-      filter(inc_to_pov_ratio %in% incpov_cat_keep,
-             age == acs5_ages) 
+      filter(
+        inc_to_pov_ratio %in% incpov_cat_keep,
+        age == acs5_ages
+      ) 
     
     if (verbose) print(glue("  ACS5 income cats are: {paste(levels(sort_by_char_nums(acs5_incpov_vc$inc_to_pov_ratio)), collapse = ', ')}, and ages are {paste(unique(acs5_incpov_vc$age), collapse = ',')}.\n"))
     acs5_incpov_vc <- 
       acs5_incpov_vc %>% 
-      summarize(rInc = sum(r),
-                wAcs5 = sum(w),
-                .by = GEOID)
+      summarize(
+        .by = GEOID,
+        rInc = sum(r),
+        wAcs5 = sum(w),
+      )
     
     ### Calculate joint income-and-work status work eligibility is relevant ###
     # The measures that we have calculated from pulls of the ACS 5-year data are
@@ -1050,7 +902,7 @@ make_acs5_equiv <- function(sae_ests, sae_age, verbose = FALSE) {
       # Calculate phi by PUMA for relevant incpov and work elig
       ccdf_elig_field <- glue("ccdf_elig_incratio_{local_ccdf_incratio_base}")
       acs1_forPhi <-
-        copy(acs1_child) %>% 
+        copy(acs1_elig) %>% 
         .[acs1_ages[1] <= AGEP & AGEP < acs1_ages[2],
           j = .(AGEP, PUMA, fam_incpov_ratio, all_work_sch,
                 inc_measure  = 1*(between(fam_incpov_ratio*100, incpov_left, incpov_right)),
@@ -1189,7 +1041,7 @@ if (developer_mode) {
   # aggregate.
   ccdf_inc_thresh_fpl <- get_fpl_thresh_for_ccdf()
   acs1_ccdf_p <- 
-    acs1_child %>% 
+    acs1_elig %>% 
     .[between(AGEP, 0, 6),
       j = .(acs1_ccdf = 
               sum(PWGTP[fam_incpov_ratio < ccdf_inc_thresh_fpl/100 & 
@@ -1455,7 +1307,7 @@ for (spec in specs) {
 ```{r pick a single SAE sensitivity to investigate}
 check_redis_sae <- sae_results_incpov_ctrls_100_05$sae_out_decompress
 check_stats_puma <- 
-  acs1_child %>% 
+  acs1_elig %>% 
   .[between(AGEP, 0, 5),
     j = .(wgt = sum(PWGTP)),
     by = .(PUMA, vc_value = fam_incpov_ratio_cat_by100)] %>% 
@@ -1486,20 +1338,26 @@ overs %>%
 ```{r calculate percentages of estimates falling outside of [0,1], eval = developer_mode}
 check_redis_sae %>% 
   group_by(vc_value) %>% 
-  summarize(share_model_redis_pct_lt0 = meanNA(share_model_redis_pct < 0) %>% percent(1),
-            share_model_redis_pct_gt1 = meanNA(share_model_redis_pct > 1) %>% percent(1),
-            
-            share_model_redis_log_lt0 = meanNA(share_model_redis_log < 0) %>% percent(1),
-            share_model_redis_log_gt1 = meanNA(share_model_redis_log > 1) %>% percent(1),
-            
-            share_fh_redis_pct_lt0    = meanNA(share_fh_redis_pct    < 0) %>% percent(1),
-            share_fh_redis_pct_gt1    = meanNA(share_fh_redis_pct    > 1) %>% percent(1),
-            
-            share_fh_redis_log_lt0    = meanNA(share_fh_redis_log    < 0) %>% percent(1),
-            share_fh_redis_log_gt1    = meanNA(share_fh_redis_log    > 1) %>% percent(1)) %>% 
-  pivot_longer(cols = -vc_value) %>% 
-  pivot_wider(names_from = vc_value,
-              values_from = value)
+  summarize(
+    share_model_redis_pct_lt0 = meanNA(share_model_redis_pct < 0) %>% percent(1),
+    share_model_redis_pct_gt1 = meanNA(share_model_redis_pct > 1) %>% percent(1),
+    
+    share_model_redis_log_lt0 = meanNA(share_model_redis_log < 0) %>% percent(1),
+    share_model_redis_log_gt1 = meanNA(share_model_redis_log > 1) %>% percent(1),
+    
+    share_fh_redis_pct_lt0    = meanNA(share_fh_redis_pct    < 0) %>% percent(1),
+    share_fh_redis_pct_gt1    = meanNA(share_fh_redis_pct    > 1) %>% percent(1),
+    
+    share_fh_redis_log_lt0    = meanNA(share_fh_redis_log    < 0) %>% percent(1),
+    share_fh_redis_log_gt1    = meanNA(share_fh_redis_log    > 1) %>% percent(1)
+  ) %>% 
+  pivot_longer(
+    cols = -vc_value
+  ) %>% 
+  pivot_wider(
+    names_from = vc_value,
+    values_from = value
+  )
 ```
 
 
@@ -1714,7 +1572,7 @@ ggplot(var_prop_acs5_sae,
        y = "SAE Poverty Rate") +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
   # NOTE -- this isn't what we're worried about. We're worried about the ACS1 comparison.
-  # See e.g. acs1_child[between(AGEP, 0, 5), j = sum(PWGTP[fam_incpov_ratio_cat_by100 == "0%-100%"])/sum(PWGTP), by = PUMA]
+  # See e.g. acs1_elig[between(AGEP, 0, 5), j = sum(PWGTP[fam_incpov_ratio_cat_by100 == "0%-100%"])/sum(PWGTP), by = PUMA]
 ```
 
 
@@ -1905,7 +1763,7 @@ map_sae_components(my_dt, "sae_pov_model_05", "", val_limits = limits_05, save_l
   # compare with puma aggregate calcs
 
 (puma_agg_acs1 <- 
-   acs1_child[between(AGEP, 0, 5),
+   acs1_elig[between(AGEP, 0, 5),
               .(sample_n = .N,
                 n_acs1 = sum(PWGTP),
                   n_lt225fpl         = sum(PWGTP[fam_incpov_ratio <= 2.25]),
@@ -2010,7 +1868,7 @@ ggplotly(plot_puma_pops, tooltip = "group")
 
 ```{r investigate the amount of noise in the ACS1 sample}
 # The counts of young children (age 0-5) are very low
-acs1_child[between(AGEP, 0, 5), 
+acs1_elig[between(AGEP, 0, 5), 
            .N, 
            by = PUMA] %>% 
   .[order(PUMA)] %>% 
