@@ -33,38 +33,38 @@ This code develops counts of individuals by age, by tract as of the year of the 
 
 ```{r}
 # Load prepped data
-for (f in c("acs1", "acs5", "pop", "geo")) {
+for (f in c("acs1", "acs5")) {
   load(file = glue("{output_path}{f}_data_{my_output_tag}.Rda"))
 }
 ```
 
 
 ```{r select acs5 age counts}
-age5_t <- 
+ageCounts_t <- 
   acs5tract %>% 
   select(
-    matches("GEOID|age.+count")
+    matches("GEOID|^rAge")
   )
 ```
 
 ```{r merge PUMA into tract-level data}
 
-age5_pt <- 
+ageCounts_pt <- 
   merge(
-    age5_t,
+    ageCounts_t,
     geo_crosswalk %>% select(GEOID, PUMA) %>% unique(),
     by = "GEOID"
   )
 
-stopifnot(nrow(age5_t) == nrow(age5_pt))
+stopifnot(nrow(ageCounts_t) == nrow(ageCounts_pt))
 ```
 
 
 ```{r function to build acs1 counts within age range}
 get_puma_totals <- function(bounds) {
   
-  stopifnot(all(bounds %in% acs1_child$AGEP))
-  acs1_child %>% 
+  stopifnot(all(bounds %in% acs1_elig$AGEP))
+  acs1_elig %>% 
     filter(
       between(AGEP, bounds[1], bounds[2])
     ) %>% 
@@ -75,9 +75,9 @@ get_puma_totals <- function(bounds) {
 
 stopifnot(
   get_puma_totals(c(0, 5)) %>% 
-    filter(PUMA == acs1_child$PUMA[1]) %>% 
+    filter(PUMA == acs1_elig$PUMA[1]) %>% 
     pull(n_p_to) == 
-    acs1_child %>% 
+    acs1_elig %>% 
     filter(
       0 <= AGEP, 
       AGEP <= 5
@@ -87,7 +87,7 @@ stopifnot(
       n_p_to = sum(PWGTP)
     ) %>% 
     filter(
-      PUMA == acs1_child$PUMA[1]
+      PUMA == acs1_elig$PUMA[1]
     ) %>% 
     pull(n_p_to)
 )
@@ -103,7 +103,7 @@ get_age_bounds <- function(age_var) {
       ) %>% 
       unlist() %>% 
       as.numeric()
-  } else if (str_detect(age_var, "lt\\d")) {
+  } else if (str_detect(age_var, "[Ll]t\\d")) {
     ub <- 
       str_extract(
         age_var, 
@@ -111,12 +111,21 @@ get_age_bounds <- function(age_var) {
       ) %>% 
       as.numeric()
     bounds <- c(0, ub - 1)
+  } else if (str_detect(age_var, "\\dplus")) {
+    lb <- 
+      str_extract(
+        age_var, 
+        "\\d+"
+      ) %>% 
+      as.numeric()
+    bounds <- c(lb, Inf)
   }
   return(bounds)
 }
 
-stopifnot(get_age_bounds("age_6to8_count") == c(6, 8))
-stopifnot(get_age_bounds("age_lt3_count")  == c(0, 2))
+stopifnot(get_age_bounds("rAge0to18")  == c( 0, 18))
+stopifnot(get_age_bounds("rAge19to64") == c(19, 64))
+stopifnot(get_age_bounds("rAge65plus") == c(65, Inf))
 ```
 
 
@@ -127,7 +136,7 @@ calibrate_counts <- function(age_var) {
   my_bounds <- get_age_bounds(age_var)
   age_counts_p <- get_puma_totals(my_bounds)
   
-  age5_pt %>% 
+  ageCounts_pt %>% 
     mutate(
       .by = PUMA,
       n_p_from = sum(get(age_var))
@@ -144,7 +153,7 @@ calibrate_counts <- function(age_var) {
 
 # Sanity checks
 if (FALSE) {
-  x <- calibrate_counts("age_0to5_count")
+  x <- calibrate_counts("rAge0to18")
   x %>% select(PUMA, calib_mult) %>% unique() %>% pull(calib_mult) %>% hist()
   x %>% 
     filter(
@@ -152,7 +161,7 @@ if (FALSE) {
     ) %>% 
     ggplot() +
     aes(
-      x = age_0to5_count,
+      x = rAge0to18,
       y = calib
     ) + 
     geom_point() + 
@@ -185,19 +194,25 @@ batch_calibrations <- function(age_vars) {
 pop_age_t_calib <- 
   batch_calibrations(
     c(
-      "age_lt3_count",
-      "age_3to5_count",
-      "age_6to12_count"
-      # "age_12to14_count",
-      # "age_15to17_count"
+      "rAge0to18",
+      "rAge19to64",
+      "rAge65plus"
     )
+  )
+
+pop_age_t_calib_wide <- 
+  pop_age_t_calib %>% 
+  pivot_wider(
+    id_cols = "GEOID",
+    values_from = "calib",
+    names_from = "age_var"
   )
 ```
 
 
 ```{r save long-by-year population data}
 save(
-  pop_age_t_calib,
+  pop_age_t_calib, pop_age_t_calib_wide,
   file = glue("{output_path}pop_data_{my_output_tag}.Rda")
 )
 ```
