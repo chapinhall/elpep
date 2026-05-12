@@ -46,6 +46,7 @@ meanNA <- function(x, ...) mean(x = x[!is.infinite(x)], ..., na.rm = TRUE)
 n_nonmiss   <- function(x) sum(!is.na(x))
 pct_nonmiss <- function(x) mean(!is.na(x))
 bound_val <- function(x, lower, upper) pmin(x, upper) %>% pmax(., lower)
+paste_ <- function(...) paste(..., sep = "_")
  
 whats_big <- function() {
   sapply(ls(), 
