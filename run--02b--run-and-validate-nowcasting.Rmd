@@ -25,385 +25,17 @@ for (f in c("geo", "cps", "acs5", "pop")) {
 load(file = glue("{output_path}sae_sensitivity_estimates_{my_output_tag}.Rda")) 
 ```
 
-## Motivate Potential Now-casting Specifications
-
-### Examine sampling of CPS cohorts
-
-```{r examine the size of CPS cohorts}
-cps_cohort_ns <- 
-  cps_child_base[j = .(n = .N),
-                 by = .(YEAR, MONTH, YEAR_MONTH)]
-
-ggplot(cps_cohort_ns[YEAR > 2015],
-       aes(x = YEAR_MONTH,
-           y = n)) +
-  geom_bar(stat = "identity") +
-  labs(title = "Number of Households First Entering the CPS, by Year and Month",
-       subtitle = "The size of cohorts are consistent, except for sampling concerns around the initial COVID-19 wave",
-       x = "Year/Month of First Entry",
-       y = "# of Households") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1))
-```
-
-### Examine Rates of Household Transition from Baseline to Post
-
-To gain descriptive evidence of the pandemic's impact, we first examine transitions into poverty by a range of household circumstances at baseline.
-
-```{r function to visualize transitions}
-visualize_cps_transitions <- function(trans_calcs, # transition calculations output from the `calc_cps_transitions` function
-                                      vul_vars,    # Character vector of names of two vulnerability fields
-                                      vul1_label,  # Label for the first vulnerability field
-                                      vul2_label,  # Label for the second vulnerability field
-                                      title) {
-  ggplot(trans_calcs[j = outcome_label := label_outcome(outcome_var)],
-         aes(x = get(vul_vars[1]),
-             y = ratio_mean,
-             fill = get(vul_vars[2]))) +
-  geom_bar(stat = "identity",
-           position = "dodge") +
-  geom_hline(yintercept = 1.0) +
-  scale_fill_discrete(name = vul2_label) +
-  facet_grid(~ outcome_label) +
-  labs(x = vul1_label,
-       y = "# Children Eligible in Post\nper 1.0 Children at Baseline",
-       title = title)
-}
-```
-
-#### Examine the role of adjusting for economic impact payments
-
-We compare the impact on transition rates of adjusting program eligibility (and baseline income, if warranted) for the Economic Impact Payments.
-
-```{r calculate CPS transitions by only poverty -- unadjusted}
-if (2019 %in% cps_child_base$YEAR) {
-  cps_transition_pov_unadj <- 
-    calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & METRO %in% 2:4],
-                         #stratum_vars = "child_agegroup",
-                         vulnerability_vars = c("fam_incpov_ratio_cat_by100"), 
-                         outcome_vars = c("incpov_le100_post",
-                                          "incpov_le200_post"))
-  
-  cps_transition_pov_adj <- 
-    calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & METRO %in% 2:4],
-                         #stratum_vars = "child_agegroup",
-                         vulnerability_vars = c("fam_incpov_ratio_cat_by100_adj"), 
-                         outcome_vars = c("incpov_le100_post_adj",
-                                          "incpov_le200_post_adj"))
-  
-  cps_transition_pov_comp <-
-    bind_rows(cps_transition_pov_unadj,
-              cps_transition_pov_adj %>% 
-                rename(fam_incpov_ratio_cat_by100 = fam_incpov_ratio_cat_by100_adj)) %>% 
-    mutate(calc = ifelse(str_detect(outcome_var, "_adj$"), "Adjusted", "Unadjusted") %>% 
-             factor(levels = c("Unadjusted", "Adjusted")),
-           outcome_var = str_replace_all(outcome_var, "_adj", ""),
-           outcome_label = label_outcome(outcome_var))
-  
-  visualize_cps_transitions(trans_calcs = cps_transition_pov_comp, 
-                            vul_vars = c("fam_incpov_ratio_cat_by100", "calc"),
-                            vul1_label = "Income-to-Poverty at Baseline",
-                            vul2_label = "Adjustment",
-                            title      = "Comparing Transition Rates from Baseline to Post-Period Eligibility")  
-}
-
-```
-
-We examine transitions by poverty and head of household industry for income-to-poverty, adjusting for Economic Impact Payments.
-
-```{r calculate CPS transitions by adjusted poverty and head of household industry}
-if (2019 %in% cps_child_base$YEAR) {
-  cps_transition_pov_indv <- 
-    calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & METRO %in% 2:4],
-                         #stratum_vars = "child_agegroup",
-                         vulnerability_vars = c("fam_incpov_ratio_cat_by100_adj",
-                                                "hoh_industry_vulnerable"), 
-                         outcome_vars = c("incpov_le100_post_adj",
-                                          "incpov_le200_post_adj"))
-  
-  visualize_cps_transitions(trans_calcs = cps_transition_pov_indv, 
-                            vul_vars = c("fam_incpov_ratio_cat_by100_adj",
-                                         "hoh_industry_vulnerable"),
-                            vul1_label = "Income-to-Poverty at Baseline",
-                            vul2_label = "Head of Household: 'Vulnerable' Work Industry",
-                            title      = "Comparing Transition Rates from Baseline to Post-Period Eligibility") 
-}
-```
-
-#### Examine the role of presence of school-aged youth
-
-```{r calculate CPS transitions by poverty and presence of school-aged child}
-if (2019 %in% cps_child_base$YEAR) {
-  cps_transition_pov_schkid <- 
-    calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & METRO %in% 2:4],
-                         #stratum_vars = "child_agegroup",
-                         vulnerability_vars = c("fam_incpov_ratio_cat_by100_adj",
-                                                "has_schage_kid_base"), 
-                         outcome_vars = c("incpov_le100_post_adj", 
-                                          "incpov_le200_post_adj",
-                                          "hoh_empl_post"))
-  
-  visualize_cps_transitions(trans_calcs = cps_transition_pov_schkid, 
-                            vul_vars = c("fam_incpov_ratio_cat_by100_adj", 
-                                         "has_schage_kid_base"),
-                            vul1_label = "Income-to-Poverty at Baseline",
-                            vul2_label = "School-aged Child at Baseline",
-                            title      = "Comparing Transition Rates from Baseline to Post-Period Eligibility") +
-    theme(axis.text.x = element_text(angle = 90,
-                                     hjust = 1))  
-}
-
-```
-
-#### Examine transitions into employment
-
-```{r calculate CPS transitions by poverty and base-employment to post-employment}
-if (2019 %in% cps_child_base$YEAR) {
-  cps_child_base[j = fhoh_empl := factor(hoh_empl, 
-                                         levels = 0:1,
-                                         labels = c("HOH Not Emp, Base",
-                                                    "HOH Emp, Base"))]
-  transition_ratios_empl_2019 <-
-    calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & MONTH == 1], 
-                         stratum_vars = NULL, 
-                         vulnerability_vars = c("fam_incpov_ratio_cat_by100_adj", 
-                                                "fhoh_empl"),
-                         outcome_vars = c("hoh_empl_post"),
-                         use_boot = TRUE)
-  
-  visualize_cps_transitions(trans_calcs = transition_ratios_empl_2019, 
-                            vul_vars = c("fam_incpov_ratio_cat_by100_adj",
-                                         "fhoh_empl"),
-                            vul1_label = "Income-to-Poverty at Baseline",
-                            vul2_label = "Head of Household Baseline Employment",
-                            title      = "Comparing Transition Rates in Employment from Baseline to Post") 
-}
-```
-
-#### Examine transitions in to employment based on metropolitan status of geography
-
-We compare transition subsets by geographic subset   
-
-```{r, eval = developer_mode}
-# Be sure to strip off any file extension provided by users
-cps_raw <- str_replace(cps_raw, "\\.\\w+", "")
-#cps_documentation <- read_ipums_ddi(glue("{input_path}{cps_raw}.xml"))
-#show_ipums_doc(cps_documentation,
-#               fields = c("METRO"))
-```
-
-We compare transition ratios across inclusion of surveyed households by metropolitan residence status.
-
-```{r calculate CPS transitions by metro residence status}
-if (2019 %in% cps_child_base$YEAR) {
-  transition_ratios_empl_2019_metro <-
-    calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & MONTH == 1 & METRO %in% 1:4] %>% 
-                           .[j = METRO := factor(METRO, 
-                                                 levels = 1:4,
-                                                 labels = c("Not in Metro", "Central City", 
-                                                            "Outside Central City", "Central City Status Unknown"))], 
-                         stratum_vars = NULL, 
-                         vulnerability_vars = c("fam_incpov_ratio_cat_by100_adj",
-                                                "METRO"),  # , "hoh_industry_vulnerable"
-                         outcome_vars = c("hoh_empl_post"),
-                         use_boot = TRUE)
-  
-  visualize_cps_transitions(trans_calcs = transition_ratios_empl_2019_metro, 
-                            vul_vars = c("fam_incpov_ratio_cat_by100_adj",
-                                         "METRO"),
-                            vul1_label = "Income-to-Poverty at Baseline",
-                            vul2_label = "Residence status",
-                            title = "Comparing Transition Rates in Employment from Baseline to Post-Period Eligibility")  
-}
-
-```
-
-#### Examine transitions in to income bands based on metropolitan status of geography
-
-```{r calculate transition ratio calculations by geography}
-trans_ratio_calc_byinput <- function(subset_data, subset_label) {
-  calc_cps_transitions(base_data = subset_data, 
-                       stratum_vars = NULL, 
-                       vulnerability_vars = c("fam_incpov_ratio_cat_by100"), 
-                       outcome_vars = c("incpov_le100_post", "incpov_le200_post"),
-                       use_boot = TRUE) %>% 
-    mutate(subset_label = subset_label)
-}
-
-if (2019 %in% cps_child_base$YEAR) {
-  trans_ratios_2019       <- trans_ratio_calc_byinput(cps_child_base[YEAR == 2019],                  "All CPS")
-  trans_ratios_metro      <- trans_ratio_calc_byinput(cps_child_base[YEAR == 2019 & METRO %in% 2:4], "Metro")
-  trans_ratios_citycenter <- trans_ratio_calc_byinput(cps_child_base[YEAR == 2019 & METRO == 2],     "City Center")  
-}
-
-```
-
-
-#### Examine transitions into CCDF status by presence of spouse
-
-We examine transitions into CCDF eligibility.
-
-```{r calculate CPS transitions into CCDF by income and spouse presence}
-if (2019 %in% cps_child_base$YEAR) {
-  cps_transition_ccdf <- 
-    calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & METRO %in% 2:4],
-                         #stratum_vars = "child_agegroup",
-                         vulnerability_vars = c("fam_incpov_ratio_cat_by100_adj",
-                                                "fSpouse_present"), 
-                         outcome_vars = glue("ccdf_elig_incratio_{local_ccdf_incratio_base}"))
-  
-  visualize_cps_transitions(trans_calcs = cps_transition_ccdf, 
-                            vul_vars = c("fam_incpov_ratio_cat_by100_adj",
-                                         "fSpouse_present"),
-                            vul1_label = "Income-to-Poverty at Baseline",
-                            vul2_label = "Spouse Present at Baseline",
-                            title      = "Comparing CCDF Transition Rates from Baseline to Post-Period Eligibility") +
-    theme(axis.text.x = element_text(angle = 90,
-                                     hjust = 1))  
-}
-
-```
-
-#### Examine transitions into CCDF status by baseline work eligibility
-
-```{r calculate CPS transitions into CCDF by income and workforce eligibility}
-if (2019 %in% cps_child_base$YEAR) {
-  cps_transition_ccdf <- 
-    calc_cps_transitions(base_data = cps_child_base[YEAR == 2019 & METRO %in% 2:4] %>% 
-                           .[j = fCcdf_elig := c("Not Working Elig (base)", 
-                                                 "Working Elig (base)")[1 + ccdf_elig_tight]],
-                         #stratum_vars = "child_agegroup",
-                         vulnerability_vars = c("fam_incpov_ratio_cat_by100_adj",
-                                                "fCcdf_elig"), 
-                         outcome_vars = glue("ccdf_elig_incratio_{local_ccdf_incratio_base}"))
-  
-  visualize_cps_transitions(trans_calcs = cps_transition_ccdf, 
-                            vul_vars = c("fam_incpov_ratio_cat_by100_adj",
-                                         "fCcdf_elig"),
-                            vul1_label = "Income-to-Poverty at Baseline",
-                            vul2_label = "Spouse Present at Baseline",
-                            title      = "Comparing CCDF Transition Rates from Baseline to Post-Period Eligibility") +
-    theme(axis.text.x = element_text(angle = 90,
-                                     hjust = 1))  
-}
-
-```
-
-#### Examine transitions into CCDF status by baseline work eligibility
-
-Compare transition ratios across inclusion of surveyed households by metropolitan residence status.
-
-```{r compare sensitivities across location}
-if (2019 %in% cps_child_base$YEAR) {
-  comp_vars <- c("ratio_mean", "ratio_se")
-  keep_vars <- c("fam_incpov_ratio_cat_by100", "outcome_var", comp_vars)
-  
-  comp_ratios_loc <- 
-    bind_rows(trans_ratios_2019,
-              trans_ratios_metro,
-              trans_ratios_citycenter) %>% 
-    mutate(outcome_label = label_outcome(outcome_var),
-           loc = factor(subset_label, levels = c("All CPS", "Metro", "City Center")))
-  
-  ggplot(comp_ratios_loc,
-         aes(x = outcome_label, 
-             y = ratio_mean,
-             fill = loc,
-             group = loc)) +
-    geom_bar(stat = "identity",
-             position = "dodge") +
-    geom_errorbar(aes(ymin = ratio_mean - 1.96*ratio_se,
-                      ymax = ratio_mean + 1.96*ratio_se),
-                  width = 0.2,
-                  position = position_dodge(0.9)) +
-    facet_wrap(~ fam_incpov_ratio_cat_by100) +
-    scale_fill_discrete(name = "") +
-    labs(x = "",
-         y = "Transition Ratio",
-         title = "Transition Ratios by CPS Geographic Subset") 
-}
-```
-
-#### Examine transitions into income bands by CPS cohort
-
-We examine sensitivities of "transition ratios" across choices of CPS entering cohorts to include.
-
-```{r calculate transition ratio calculations by cohort}
-if (2019 %in% cps_child_base$YEAR) {
-  trans_ratios_2019_01  <- trans_ratio_calc_byinput(cps_child_base[METRO %in% 2:4 & YEAR == 2019 & MONTH == 1], "Jan 2019 Cohort")
-  trans_ratios_2019     <- trans_ratio_calc_byinput(cps_child_base[METRO %in% 2:4 & YEAR == 2019],              "All 2019 Cohorts")
-  trans_ratios_2020_02  <- trans_ratio_calc_byinput(cps_child_base[METRO %in% 2:4 & YEAR == 2020 & MONTH == 2], "Feb 2020 Cohort")
-  trans_ratios_2020_win <- trans_ratio_calc_byinput(cps_child_base[METRO %in% 2:4 & YEAR_MONTH %in% c("2019-12", paste0("2020-0", 1:2))],              "Winter 19/20 Cohort")
-}
-```
-
-```{r compare sensitivities across cps cohorts}
-if (2019 %in% cps_child_base$YEAR) {
-  comp_vars <- c("ratio_mean", "ratio_se")
-  keep_vars <- c("fam_incpov_ratio_cat_by100", "outcome_var", comp_vars)
-  
-  comp_ratios_cohort <- 
-    bind_rows(trans_ratios_2019,
-              trans_ratios_2019_01,
-              trans_ratios_2020_02,
-              trans_ratios_2020_win) %>% 
-    mutate(outcome_label = label_outcome(outcome_var),
-           cohorts = factor(subset_label, 
-                            levels = c("All 2019 Cohorts", "Jan 2019 Cohort", "Feb 2020 Cohort", "Winter 19/20 Cohort")))
-  
-  ggplot(comp_ratios_cohort,
-         aes(x = outcome_label, 
-             y = ratio_mean,
-             fill = cohorts,
-             group = cohorts)) +
-    geom_bar(stat = "identity",
-             position = "dodge") +
-    geom_errorbar(aes(ymin = ratio_mean - 1.96*ratio_se,
-                      ymax = ratio_mean + 1.96*ratio_se),
-                  width = 0.2,
-                  position = position_dodge(0.9)) +
-    facet_wrap(~ fam_incpov_ratio_cat_by100) +
-    scale_fill_discrete(name = "")
-}
-```
-
 ## Implement the Now-Casting Method
 
 This method considers community factors of households for predicting potential transition into eligibility status. In addition to accounting for "vulnerability" factors such as baseline poverty status, this method can also consider factors like education, race/ethnicity, or general industries employing local workers.
 
 While the SAE method is limited in how much detail it can estimate for 2019 with validity, this method uses other measures by assuming that ACS 5-year measures are applicable to 2019. For some measures like adult educational attainment and race/ethnicity, we believe that this assumption is defensible.
 
-```{r prepare cps data for statistical analysis of transitions}
-# Note--fields that need to be constructed in parallel to the SAE specifications
-# are done in functions below, custom to the fields represented in the SAE spec
-# driving a given analysis
-cps_child_base_post <- 
-  merge(cps_child_base,
-        cps_post,
-        by = "CPSID",
-        all.x = TRUE,
-        suffixes = c("_b", "_p")) %>% 
-  mutate(
-         # Develop measures that are parallel to general controls in the ACS 5-year
-         ed_lths     = 1*(str_detect(hoh_educ, "less_hs")),
-         ed_hs       = 1*(str_detect(hoh_educ, "^hs")),
-         ed_somecoll = 1*(str_detect(hoh_educ, "somecoll")),
-         ed_coll     = 1*(str_detect(hoh_educ, "^coll")),
-         
-         pctFemale_noSp_est = 1*((!spouse_present)*(hoh_gender == "female")),
-           pctMale_noSp_est = 1*((!spouse_present)*(hoh_gender == "male")),
-             pctMarried_est = 1*(  spouse_present)
-  )
-```
 
 ```{r develop select subsets of cps pre-post data for use}
 
-cps_child_base_post[j = YEAR_MONTH_p := paste(YEAR_p, 
-                                              str_pad(MONTH_p, side = "left", pad = "0", width = 2), 
-                                              sep = "-")]
-
 recent_cps_months <- 
-  cps_child_base_post %>% 
+  cps_trans %>% 
   pull(YEAR_MONTH_p) %>% 
   setdiff("NA-NA") %>% 
   unique() %>% 
@@ -421,20 +53,10 @@ most_recent_sy_months <-
   recent_cps_months %>% 
   .[1:last_september_i]
 
-cps_reg_sample_most_recent <- 
-  cps_child_base_post[YEAR_MONTH_p %in% most_recent_months]
+cps_reg_sample_most_recent    <- filter(cps_trans, YEAR_MONTH_p %in% most_recent_months)
+cps_reg_sample_most_recent_sy <- filter(cps_trans, YEAR_MONTH_p %in% most_recent_sy_months)
+cps_reg_sample_allbase        <- filter(cps_trans, YEAR_b == base_year)
 
-cps_reg_sample_most_recent_sy <- 
-  cps_child_base_post[YEAR_MONTH_p %in% most_recent_sy_months]
-
-# Select all 
-cps_reg_sample_allbase <- 
-  cps_child_base_post[YEAR_b == base_year]
-  
-# Check post-period months
-if (FALSE) {
-  reg_sample_2020[, .(YEAR_p, MONTH_p)] %>% unique()
-}
 ```
 
 ```{r pivot SAE measures wide}
@@ -453,6 +75,7 @@ pivot_sae_wide <- function(sae_spec, share_var) {
 
 ```{r develop list of predictors for transition/now-casting}
 # Develop controls
+
 # /!\ Other predictors to consider building include:
 # - presence of spouse, 
 # - labor force participation
@@ -462,25 +85,23 @@ pivot_sae_wide <- function(sae_spec, share_var) {
 # We have started with a single measure--education--for proof of concept, and as
 # a strong correlate of other factors
 
-# /!\ Should generalize the method to fit different SAE methods
-# That would require tailoring this set of controls. Could make that flexible by
-# drawing on columns in the corresponding sae_ctrls_wide input
-
 # These are all fields relevant to predicting post-period status
+
+sae_controls_workstatus <- 
+  c("rEmpl_Male", "rEmpl_Female",
+    "rUnmarriedFemaleHh", "rUnmarriedMaleHh")
+
 transition_pred_vars_acs5 <- 
-  c("ed_lths", "ed_hs", "ed_somecoll", "ed_coll",
-    "pctFemale_noSp_est", "pctMale_noSp_est", "pctMarried_est")
+  c("rEdLtHs", "rEdSomeColl", "rEdAssoc", "rEdColl", "rEdGrad",
+    "rUnmarriedFemaleHh", "rUnmarriedMaleHh")
 
 # Set reference group categories
 transition_pred_vars_toomit <- 
-  c("ed_lths", "pctMarried_est")
+  c("rEdHs", "rMarried")
   # ... Currently choosing to allow these reference variables to be included,
   # because we want to have them show up in "unconditional" regressions (where)
   # each level effectively estimates its average. To enable this, we're estimating
   # the regressions without intercepts.
-  #   "share_0_100",
-  #   "share_NotWorkElig_0_100",
-  #   "share_NotWorkElig_NoSpousePresent"
 ```
 
 ```{r subset acs 5-year data that is relevant based on the specification}
@@ -488,15 +109,16 @@ transition_pred_vars_toomit <-
 # Subset to variables selected for "now"-casting, as well as SAE measures
 # for later reference
 acs5_keep_vars <- 
-  unique(c("GEOID", "COUNTYFIP",
-           "age_0to5_count",  "age_0to5_se", 
-           "age_6to12_count", "age_6to12_se", 
-           transition_pred_vars_acs5,
-           sae_controls_list %>% unlist()))
+  c("GEOID", "COUNTYFIP",
+    "nAge0to19", "nAge20to64", "nAge65plus",
+    transition_pred_vars_acs5,
+    sae_controls_list) %>% 
+  unlist() %>% 
+  unique()
 
 acs5tract_reg <- 
   acs5tract %>% 
-  select(one_of(acs5_keep_vars))
+  select(all_of(acs5_keep_vars))
 
 if (exists("my_county_fip")) {
   acs5tract_reg <- 
@@ -647,33 +269,37 @@ for (cps_recency in c("most_recent", "allbase", "sy")) {
       # around modeling choices.
       
       ages <- str_extract(sae_spec, "\\d+$")
-      if (ages == "05") {
-        age_prefix <- "age_0to5"
-        cps_reg_use <- cps_reg_data_sample[between(AGE, 0, 5)]
-      } else if (ages == "612") {
-        age_prefix <- "age_6to12"
-        cps_reg_use <- cps_reg_data_sample[between(AGE, 6, 12)]
+      if (ages == "019") {
+        age_prefix <- "Age0to19"
+        cps_reg_use <- filter(cps_reg_data_sample, between(AGE, 0, 19))
+      } else if (ages == "2064") {
+        age_prefix <- "Age20to64"
+        cps_reg_use <- filter(cps_reg_data_sample, between(AGE, 6, 12))
+      } else if (ages == "65plus") {
+        age_prefix <- "Age65plus"
+        cps_reg_use <- filter(cps_reg_data_sample, AGE >= 65)
       }
       
       share_calc_var_use <- 
-          ifelse(use_only_sae_model_estimates,
-                 "share_model_redis_pct01_infl",
-                 "share_fh_redis_pct01_infl")
+        ifelse(
+          use_only_sae_model_estimates,
+          "share_model_redis_pct01_infl",
+          "share_fh_redis_pct01_infl"
+        )
       
-      if (str_detect(sae_spec, "^incpov")) {
+      if (str_detect(sae_spec, "^inc_")) {
         # Using the poverty estimates to predict poverty-related eligibility, 
         # as well as CCDF eligibility because why not. Also there's reason to 
         # believe that more parsimonious specifications may do better.
-        outcome_vars <- c("incpov_le50_post_adj", 
-                          "incpov_le100_post_adj", 
-                          "incpov_le130_post_adj", 
-                          "incpov_le185_post_adj", 
-                          "incpov_le200_post_adj", 
-                          "incpov_le225_post_adj", 
-                          "incpov_le400_post_adj")
+        outcome_vars <- 
+          c(
+            "bIncpov_le130", 
+            "bIncpov_le138", 
+            "bIncpov_le205"
+          )
         
-      } else if (str_detect(sae_spec, "^ccdf")) {
-        outcome_vars <- str_subset(cn(cps_reg_use), "ccdf_elig_incratio_")
+      } else if (str_detect(sae_spec, "^incwork")) {
+        outcome_vars <- str_subset(cn(cps_reg_use), "bProg_eligThresh_incpov_")
       }
     
       for (outcome_var in outcome_vars) {
@@ -683,29 +309,37 @@ for (cps_recency in c("most_recent", "allbase", "sy")) {
         
         # browser() 
         count_est_output <- 
-          estimate_transition_counts(sae_spec_name   = glue("sae_results_{sae_spec}"),
-                                     share_calc_var  = share_calc_var_use,
-                                     outcome_var     = outcome_var,
-                                     transition_data = cps_reg_use,
-                                     age_prefix      = age_prefix)
+          estimate_transition_counts(
+            sae_spec_name   = glue("sae_results_{sae_spec}"),
+            share_calc_var  = share_calc_var_use,
+            outcome_var     = outcome_var,
+            transition_data = cps_reg_use,
+            age_prefix      = age_prefix
+          )
         
         add_run_details <- function(x) {
-          mutate(x,
-                 sae_spec          = sae_spec,
-                 cps_base_recency  = cps_recency,
-                 cps_geo_subsample = cps_geo_subsample,
-                 outcome_var       = outcome_var)
+          mutate(
+            x,
+            sae_spec          = sae_spec,
+            cps_base_recency  = cps_recency,
+            cps_geo_subsample = cps_geo_subsample,
+            outcome_var       = outcome_var
+          )
         }
         
         # Collect count estimates
         nowcast_out <-
-          bind_rows(nowcast_out,
-                    add_run_details(count_est_output[[1]]))
+          bind_rows(
+            nowcast_out,
+            add_run_details(count_est_output[[1]])
+          )
         
         # Collect betas
         nowcast_betas_out <- 
-          bind_rows(nowcast_betas_out,
-                    add_run_details(count_est_output[[2]]))
+          bind_rows(
+            nowcast_betas_out,
+            add_run_details(count_est_output[[2]])
+          )
         
       } # end loop across outcomes
     } # end loop across SAE specifications
@@ -718,20 +352,28 @@ nowcast_betas_out <- data.table(nowcast_betas_out)
 ```{r reorganize metadata in the nowcast output}
 nowcast_out <- 
   nowcast_out %>% 
-  mutate(age = str_extract(sae_spec, "\\d+$"),
-         age = case_match(age,
-                          "05"  ~ "age_0to5",
-                          "612" ~ "age_6to12"),
-         sae_spec = str_replace(sae_spec, "_\\d+$", ""))
+  mutate(
+    age = str_extract(sae_spec, "\\d+$"),
+    age = 
+      case_match(
+        age,
+        "019"    ~ "Age0to19",
+        "2064"   ~ "Age20to64",
+        "65plus" ~ "Age65plus"
+        
+      ),
+    sae_spec = str_replace(sae_spec, "_\\d+$", ""))
 ```
 
 ```{r examine share estimates outside of [0.0-1.0] and truncate}
 if (developer_mode) {
   # Examine frequency of 
   nowcast_out %>% 
-    summarize(elig_share_lt0 = mean(elig_share < 0) %>% percent(accuracy = .1),
-              elig_share_gt1 = mean(elig_share > 1) %>% percent(accuracy = .1),
-              .by = c(sae_spec, outcome_var))
+    summarize(
+      .by = c(sae_spec, outcome_var),
+      elig_share_lt0 = mean(elig_share < 0) %>% percent(accuracy = .1),
+      elig_share_gt1 = mean(elig_share > 1) %>% percent(accuracy = .1)
+    )
   
   # Examine magnitude of negative share estimates
   nowcast_out %>% 
