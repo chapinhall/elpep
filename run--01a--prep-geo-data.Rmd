@@ -71,15 +71,17 @@ geo_crosswalk_puma <-
 
 geo_crosswalk_zcta <-
   fread("https://www2.census.gov/geo/docs/maps-data/data/rel2020/zcta520/tab20_zcta520_tract20_natl.txt") %>%
-  rename(GEOID = GEOID_TRACT_20,
-         ZCTA  = GEOID_ZCTA5_20) %>% 
-  mutate(GEOID         = str_pad(GEOID, width = 11, side = "left", pad = "0"),  #GEOID: 11-digit (concatenation of state, county, place, and tract)
-         STATEFIP      = substr(GEOID, 1,2),
-         AREALAND_PART = as.numeric(AREALAND_PART)) %>%
+  rename(
+    GEOID = GEOID_TRACT_20,
+    ZCTA  = GEOID_ZCTA5_20
+  ) %>% 
+  mutate(
+    GEOID         = str_pad(GEOID, width = 11, side = "left", pad = "0"),  #GEOID: 11-digit (concatenation of state, county, place, and tract)
+    STATEFIP      = substr(GEOID, 1,2),
+    AREALAND_PART = as.numeric(AREALAND_PART)
+  ) %>%
   #restrict to my_state_fip
   .[STATEFIP == my_state_fip] %>%
-  #restrict to zcta_starts -- to get rid of some errors/NA's
-  .[ZCTA %in% {zcta_min}:{zcta_max}] %>%
   .[j = TRLANDPCT := AREALAND_PART / sum(AREALAND_PART),
     by = GEOID] %>%
   select(-STATEFIP) %>% 
@@ -372,13 +374,21 @@ if (exists("my_aux_geo")) {
   # Reproject if necessary
   if (st_crs(auxShp) != st_crs(tractShp)) {
     auxShp <- 
-      st_transform(auxShp,
-                   crs = st_crs(tractShp))
+      st_transform(
+        auxShp,
+        crs = st_crs(tractShp)
+      )
   }
   
+  # Handle potential issues with duplicate vertices
+  auxShp <- st_make_valid(auxShp)
+  
   # Attempt to identify intersections
-  tract_aux_intersection <- st_intersection(tractShp,
-                                            auxShp)
+  tract_aux_intersection <- 
+    st_intersection(
+      tractShp,
+      auxShp
+    )
     # This returns all geographies of tract sliced by aux, i.e. 
     # representing potential duplicates
   sf_use_s2(FALSE)
@@ -411,12 +421,17 @@ if (exists("my_aux_geo")) {
     tract_aux_intersection %>% 
     # Merge tract_area contents as new data.frame (which drops the geometry field,
     # and avoids errors)
-    merge(with(tract_area,
-               data.frame(GEOID = GEOID,
-                          tract_area = tract_area)),
-          all.x = TRUE) %>% 
-    mutate(pct_area = area / tract_area,
-           .by = GEOID)
+    merge(
+      with(
+        tract_area,
+        data.frame(GEOID = GEOID,
+                   tract_area = tract_area)),
+      all.x = TRUE
+    ) %>% 
+    mutate(
+      .by = GEOID,
+      pct_area = area / tract_area
+    )
   
   # Subset intersected geographies to those with areas that are within 2 orders of
   # magnitude of the largest. This is primarily to rule out idiosyncratic overlaps
@@ -436,8 +451,10 @@ if (exists("my_aux_geo")) {
   
   geo_crosswalk_aux <- 
     geo_crosswalk_aux %>% 
-    mutate(.by = GEOID,
-           pct_area = pct_area / sum(pct_area))
+    mutate(
+      .by = GEOID,
+      pct_area = pct_area / sum(pct_area)
+    )
   
   #stopifnot(any(table(tract_aux_intersection_keep$GEOID) > 1) == FALSE)
   
@@ -449,21 +466,33 @@ if (exists("my_aux_geo")) {
     # (3) swap these distinctions into the geo
     geo_crosswalk <- 
       geo_crosswalk %>% 
-      merge(geo_crosswalk_aux %>% select(one_of(c("GEOID", my_aux_geo_field, "pct_area"))),
-            by = "GEOID",
-            all.x = TRUE) %>% 
-      setnames(my_aux_geo_field,
-               "my_aux_geo_field") %>% 
+      merge(
+        geo_crosswalk_aux %>% select(one_of(c("GEOID", my_aux_geo_field, "pct_area"))),
+        by = "GEOID",
+        all.x = TRUE
+      ) %>% 
+      setnames(
+        my_aux_geo_field,
+        "my_aux_geo_field"
+      ) %>% 
       # Flag whether the tract is present inside of the auxiliary geography
-      mutate(in_aux_flag = ifelse(!is.na(my_aux_geo_field), 1, 0)) %>% 
+      mutate(
+        in_aux_flag = ifelse(!is.na(my_aux_geo_field), 1, 0)
+      ) %>% 
       # By county, if no tracts are in the aux geography, maintain the county name
       # Otherwise, if there is some intersection, rename
-      mutate(.by = "County",
-             County = case_when(max(in_aux_flag) == 0 ~ County,
-                                in_aux_flag      == 0 ~ paste(County, glue("(Non-{my_aux_overall_name})")),
-                                in_aux_flag      == 1 ~ paste(County, glue("({my_aux_overall_name})"))),
-             pct_area = ifelse(is.na(pct_area), 1, pct_area)) %>% 
-      mutate(County = ifelse(County %like% "DuPage", "DuPage", County))
+      mutate(
+        .by = "County",
+        County = 
+          case_when(
+            max(in_aux_flag) == 0 ~ County,
+            in_aux_flag      == 0 ~ paste(County, glue("(Non-{my_aux_overall_name})")),
+            in_aux_flag      == 1 ~ paste(County, glue("({my_aux_overall_name})"))
+          ),
+        pct_area = ifelse(is.na(pct_area), 1, pct_area)) %>% 
+      mutate(
+        County = ifelse(County %like% "DuPage", "DuPage", County)
+      )
     
     if (FALSE) {
       cbind(
@@ -472,7 +501,8 @@ if (exists("my_aux_geo")) {
     }
   }
 } else {
-  geo_crosswalk <- geo_crosswalk %>% 
+  geo_crosswalk <- 
+    geo_crosswalk %>% 
     mutate(pct_area = 1)
 }
 ```
