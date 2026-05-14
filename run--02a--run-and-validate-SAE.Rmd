@@ -113,22 +113,22 @@ acs1_puma_stats <-
   acs1_elig %>% 
   filter(
     AGEP %in% 18:64
-  )
+  ) %>% 
   summarize(
-    .by = puma,
-    pct_pov = sum(PWGTP[fam_incpov_ratio <= 1]) / sum(PWGTP)
+    .by = PUMA,
+    rIncPov0to75_Age18to64_acs1 = sum(PWGTP[fam_incpov_ratio <= 0.75]) / sum(PWGTP)
   )
   
-  acs5puma <- 
-    acs5tract %>% 
-    merge(
-      geo_crosswalk %>% select(GEOID, PUMA) %>% unique(),
-      by = "GEOID"
-    ) %>% 
-    summarize(
-      .by = PUMA,
-      rIncPov0to100_Age18to64 = sum(nIncPov0to100_Age18to64) / sum(wIncPov0to100_Age18to64)
-    )
+acs5puma <- 
+  acs5tract %>% 
+  merge(
+    geo_crosswalk %>% select(GEOID, PUMA) %>% unique(),
+    by = "GEOID"
+  ) %>% 
+  summarize(
+    .by = PUMA,
+    rIncPov0to75_Age18to64_acs5 = sum(nIncPov0to75_Age18to64) / sum(wIncPov0to75_Age18to64)
+  )
 
 ggplot() +
   # geom_density(
@@ -137,20 +137,20 @@ ggplot() +
   #   color = "blue"
   # ) +
   geom_density(
-    data = acs5tract,
-    aes(x = rIncPov0to100_Age18to64),
+    data = acs5puma,
+    aes(x = rIncPov0to75_Age18to64_acs5),
     color = "red"
   ) +
   geom_density(
-    data = acs5puma,
-    aes(x = rIncPov0to100_Age18to64),
+    data = acs1_puma_stats,
+    aes(x = rIncPov0to75_Age18to64_acs1),
     color = "orange"
   ) +
   scale_x_continuous(
     labels = percent
   ) + 
   labs(
-    title = "Comparing Distributions of Poverty Rates for Individuals Aged 18-64",
+    title = "Comparing Distributions of Income <75% FPL for Individuals Aged 18-64",
     subtitle = glue("<span style='color:blue'>PUMA-level ACS1-year Data for {base_year}</span><br>",
                     "<span style='color:red'>Tract-level ACS5-year Data for {acs5_year-4}-{acs5_year}</span><br>",
                     "<span style='color:orange'>PUMA-level ACS5-year Data for {acs5_year-4}-{acs5_year}</span>"),
@@ -170,15 +170,23 @@ ggplot() +
 
 ```{r set specifications for sae}
 
+# sae_controls_incpov_stems <- 
+#   c(
+#     "rIncPov0to50",
+#     "rIncPov50to100",
+#     "rIncPov100to199",
+#     "rIncPov200to299",
+#     "rIncPov300to399",
+#     "rIncPov400plus"
+#   )
+
 sae_controls_incpov_stems <- 
   c(
-    "rIncPov0to50",
-    "rIncPov50to100",
-    "rIncPov100to199",
-    "rIncPov200to299",
-    "rIncPov300to399",
+    "rIncPov75to125",
+    "rIncPov125to200",
+    "rIncPov200to400",
     "rIncPov400plus"
-  )
+  ) # Reference: "rIncPov0to75",
 
 # /!\ GKFF -- 0-6 and 6-17 is not yet aggregate
 # /!\ This may not line up directly given limitations of reporting in ACS5 income-
@@ -190,7 +198,7 @@ sae_controls_incpov_Age20to64 <-
   paste0(sae_controls_incpov_stems, "_Age18to64")
 
 sae_controls_incpov_Age65plus <- 
-  paste0(sae_controls_incpov_stems, "_Age65plus")
+  paste0(sae_controls_incpov_stems, "_AgeGe65")
 
 sae_controls_ed <- 
   c("rEdLtHs", "rEdSomeColl", "rEdAssoc", "rEdColl", "rEdGrad") # reference: "rEdHs"
@@ -205,11 +213,12 @@ sae_controls_019_incwork    <- c(sae_controls_incpov_Age0to19, sae_controls_ed, 
 sae_controls_2064_inc       <- c(sae_controls_incpov_Age20to64, sae_controls_ed)
 sae_controls_2064_incwork   <- c(sae_controls_incpov_Age20to64, sae_controls_ed, sae_controls_workstatus)
 
-sae_controls_65plus_inc     <- c(sae_controls_incpov_Age65plus, sae_controls_ed)
-sae_controls_65plus_incwork <- c(sae_controls_incpov_Age65plus, sae_controls_ed, sae_controls_workstatus)
+sae_controls_65_inc     <- c(sae_controls_incpov_Age65plus, sae_controls_ed)
+sae_controls_65_incwork <- c(sae_controls_incpov_Age65plus, sae_controls_ed, sae_controls_workstatus)
 
-#stopifnot(all(c(sae_controls_019_inc, sae_controls_019_incwork) %in% colnames(acs5tract)))
+stopifnot(all(c(sae_controls_019_inc, sae_controls_019_incwork)   %in% colnames(acs5tract)))
 stopifnot(all(c(sae_controls_2064_inc, sae_controls_2064_incwork) %in% colnames(acs5tract)))
+stopifnot(all(c(sae_controls_65_inc,  sae_controls_65_incwork)    %in% colnames(acs5tract)))
 
 ```
 
@@ -221,7 +230,20 @@ acs1_elig019_sae    <- filter(acs1_elig, between(AGEP,  0, 19))
 acs1_elig2064_sae   <- filter(acs1_elig, between(AGEP, 20, 64))
 acs1_elig65plus_sae <- filter(acs1_elig, AGEP >= 65)
 
-acs5tract_sae <- acs5tract
+acs5tract_sae <- 
+  acs5tract %>% 
+  select(
+    all_of(
+      c("GEOID",
+        sae_controls_019_inc,
+        sae_controls_019_incwork,
+        sae_controls_2064_inc,
+        sae_controls_2064_incwork,
+        sae_controls_65_inc,
+        sae_controls_65_incwork
+      )
+    )
+  )
 
 # If a specific county has been specified, subset data to it
 if (exists("my_county_fip")) {
@@ -246,7 +268,7 @@ if (exists("my_county_fip")) {
 # Select specific age ranges of interest
 pop_by_age_base <- 
   pop_age_t_calib_wide %>% 
-  filter(year == base_year) %>% 
+  # filter(year == base_year) %>% 
   # Rename population values to avoid conflict with equivalent ACS5 counts, which
   # are for the prior 5 year period, not estimated for the base year as these are
   select(GEOID, nAge0to19 = nAge0to19, nAge20to64, nAge65plus)
@@ -266,6 +288,7 @@ acs5tract_sae_counts <-
     nAge20to64_se = 0,
     nAge64plus_se = 0)
 
+stopifnot(nrow(acs5tract_sae_counts) == nrow(acs5tract))
 ```
 
 ```{r establish function to run SAE method}
@@ -304,18 +327,20 @@ parallelize_sae <- TRUE
 
 inc_cat_field     <- "cFam_incpov_ratio_cat_with130"
 incwork_cat_field <- "cWork_incpov_status130"
+stopifnot(all(c(inc_cat_field, incwork_cat_field) %in% colnames(acs1_elig2064_sae)))
+
 
 if (parallelize_sae) {
   
   runlist <- 
     list(
-      sae_results_inc_019    = list(inc_cat_field, acs1_elig019_sae,    sae_controls_019_inc),
-      sae_results_inc_2064   = list(inc_cat_field, acs1_elig2064_sae,   sae_controls_2064_inc),
-      sae_results_incwork_65 = list(inc_cat_field, acs1_elig65plus_sae, sae_controls_65plus_inc),
+      # sae_results_inc_019    = list(inc_cat_field, acs1_elig019_sae,    sae_controls_019_inc),
+      sae_results_inc_2064   = list(inc_cat_field, acs1_elig2064_sae,   sae_controls_2064_inc)
+      # sae_results_incwork_65 = list(inc_cat_field, acs1_elig65plus_sae, sae_controls_65plus_inc),
       
-      sae_results_incwork_019    = list(incwork_cat_field, acs1_elig019_sae,    sae_controls_019_incwork),
-      sae_results_incwork_2064   = list(incwork_cat_field, acs1_elig2064_sae,   sae_controls_2064_incwork),
-      sae_results_incwork_65 = list(incwork_cat_field, acs1_elig65plus_sae, sae_controls_65plus_incwork),
+      # sae_results_incwork_019    = list(incwork_cat_field, acs1_elig019_sae,    sae_controls_019_incwork),
+      # sae_results_incwork_2064   = list(incwork_cat_field, acs1_elig2064_sae,   sae_controls_2064_incwork),
+      # sae_results_incwork_65 = list(incwork_cat_field, acs1_elig65plus_sae, sae_controls_65plus_incwork),
     )
   
   # Code to recruit (almost) as many core processors as are available (but not more than we need)
@@ -345,26 +370,19 @@ if (parallelize_sae) {
   
 } else {
   
-  sae_results_inc_019    = run_saes_byCtrls(inc_cat_field, acs1_elig019_sae,    sae_controls_019_inc)
+  # sae_results_inc_019    = run_saes_byCtrls(inc_cat_field, acs1_elig019_sae,    sae_controls_019_inc)
   sae_results_inc_2064   = run_saes_byCtrls(inc_cat_field, acs1_elig2064_sae,   sae_controls_2064_inc)
-  sae_results_incwork_65 = run_saes_byCtrls(inc_cat_field, acs1_elig65plus_sae, sae_controls_65plus_inc)
+  # sae_results_incwork_65 = run_saes_byCtrls(inc_cat_field, acs1_elig65plus_sae, sae_controls_65plus_inc)
   
-  sae_results_incwork_019  = run_saes_byCtrls(incwork_cat_field, acs1_elig019_sae,    sae_controls_019_incwork)
-  sae_results_incwork_2064 = run_saes_byCtrls(incwork_cat_field, acs1_elig2064_sae,   sae_controls_2064_incwork)
-  sae_results_incwork_65   = run_saes_byCtrls(incwork_cat_field, acs1_elig65plus_sae, sae_controls_65plus_incwork)
+  # sae_results_incwork_019  = run_saes_byCtrls(incwork_cat_field, acs1_elig019_sae,    sae_controls_019_incwork)
+  # sae_results_incwork_2064 = run_saes_byCtrls(incwork_cat_field, acs1_elig2064_sae,   sae_controls_2064_incwork)
+  # sae_results_incwork_65   = run_saes_byCtrls(incwork_cat_field, acs1_elig65plus_sae, sae_controls_65plus_incwork)
   
 }
 
-specs <- 
-  c(
-    "sae_results_inc_019", 
-    "sae_results_inc_2064",
-    "sae_results_inc_65",
-    
-    "sae_results_incwork_019",
-    "sae_results_incwork_2064",
-    "sae_results_incwork_65"
-  ) 
+results <- str_subset(ls(), "^sae_results")
+
+specs <- str_replace(results, "sae_results_", "")
 
 ```
 
@@ -372,24 +390,24 @@ specs <-
 # Organize contents
 sae_aux_data_acs5 <- acs5tract_sae
 sae_controls_list <- 
-  list(
-    sae_controls_019_inc,
-    sae_controls_2064_inc,
-    sae_controls_65plus_inc,
-    sae_controls_019_incwork,
-    sae_controls_2064_incwork,
-    sae_controls_65plus_incwork
+  lapply(
+    str_subset(
+      ls(), "^sae_controls.+inc(work)?$"
+    ), 
+    \(x) get(x)
   )
-results <- paste0("sae_results_", specs)
 
 # Save the bundle of objects
 save(
-  list = c(results, specs, incpov_ref_value, sae_controls_list, sae_aux_data_acs5),
+  list = c("results", "specs", "sae_controls_list", "sae_aux_data_acs5"),
   file = glue("{output_path}sae_sensitivity_estimates_interim_{my_output_tag}.Rda")
 )
 
 if (FALSE) {
-  load(file = glue("{output_path}sae_sensitivity_estimates_interim_{my_output_tag}.Rda")) 
+  load(
+    file = glue("{output_path}sae_sensitivity_estimates_interim_{my_output_tag}.Rda"), 
+    verbose = TRUE
+  ) 
 }
 ```
 
