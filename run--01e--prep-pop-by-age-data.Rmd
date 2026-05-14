@@ -33,7 +33,7 @@ This code develops counts of individuals by age, by tract as of the year of the 
 
 ```{r}
 # Load prepped data
-for (f in c("acs1", "acs5")) {
+for (f in c("geo", "acs1", "acs5")) {
   load(file = glue("{output_path}{f}_data_{my_output_tag}.Rda"))
 }
 ```
