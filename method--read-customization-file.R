@@ -198,11 +198,13 @@ kindergarten_cutoff <-
          "09-01")
 
 end_month_pre_schoolage <- 
-  (interval(ymd(glue("{base_year+1}-01-01")),
-            ymd(glue("{base_year+1}-{kindergarten_cutoff}"))) %/%
-     days(1) /  # Get difference in days
-     30.5 +     # Get difference in (roughly) monthly
-     60)        # Add to number of months up until age 5
+  (lubridate::interval(
+    ymd(glue("{base_year+1}-01-01")),
+    ymd(glue("{base_year+1}-{kindergarten_cutoff}"))
+  ) %/%
+    days(1) /  # Get difference in days
+    30.5 +     # Get difference in (roughly) monthly
+    60)        # Add to number of months up until age 5
   # Note: this does not produce a round number, which is fine for later 
   # calculations, which prorate the counts of youth by ages and are already in
   # decimal (not integer) values
