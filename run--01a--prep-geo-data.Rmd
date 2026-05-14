@@ -24,8 +24,10 @@ my_state_fip <-
 if ("my_county" %in% objects()) {
   my_county_fip <- 
     fips_codes %>% 
-    filter(state == my_state_abbr, 
-           str_detect(county, my_county)) %>% 
+    filter(
+      state == my_state_abbr, 
+      str_detect(county, my_county)
+    ) %>% 
     pull(county_code) %>% 
     unique()
 }
@@ -94,10 +96,12 @@ geo_crosswalk_zcta <-
 print(colSums(is.na(geo_crosswalk_zcta)))
 
 geo_crosswalk <-
-  merge(geo_crosswalk_puma,
-        geo_crosswalk_zcta %>% dplyr::select(GEOID, ZCTA),
-        by = "GEOID",
-        all.x = TRUE) %>% 
+  merge(
+    geo_crosswalk_puma,
+    geo_crosswalk_zcta %>% dplyr::select(GEOID, ZCTA),
+    by = "GEOID",
+    all.x = TRUE
+  ) %>% 
   data.table()
 
 if (exists("my_county_fip")) {
