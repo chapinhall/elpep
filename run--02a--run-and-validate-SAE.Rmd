@@ -44,11 +44,11 @@ show_acs1_cat_density <- function(my_cat, my_subtitle) {
 }
 
 if (FALSE) {
+  # show_acs1_cat_density(
+  #   "cFam_incpov_ratio_cat_by100",
+  #   "Income-to-Poverty by 100%s")  
   show_acs1_cat_density(
-    "cFam_incpov_ratio_cat_by100",
-    "Income-to-Poverty by 100%s")  
-  show_acs1_cat_density(
-    "cFam_incpov_ratio_cat_mix",   
+    "cFam_incpov_ratio_cat_with130",
     "Income-to-Poverty with Detail Below Poverty")
   show_acs1_cat_density(
     "cWorkThresh_incpov_status130", 
@@ -66,7 +66,7 @@ show_acs1_cat_density_by_puma <- function(my_cat, my_subtitle) {
     ) +
   geom_bar() +
   facet_grid(
-    get(my_cat) ~ child_agegroup_combo,
+    get(my_cat) ~ cAge,
     scales = "free_y"
   ) +
   labs(
@@ -82,9 +82,9 @@ show_acs1_cat_density_by_puma <- function(my_cat, my_subtitle) {
 }
 
 if (FALSE) {
-  show_acs1_cat_density_by_puma(
-    "cFam_incpov_ratio_cat_by100", 
-    "Income-to-Poverty Ratio, with Detail Below 100% FPL")  
+  # show_acs1_cat_density_by_puma(
+  #   "cFam_incpov_ratio_cat_by100", 
+  #   "Income-to-Poverty Ratio, with Detail Below 100% FPL")  
   show_acs1_cat_density_by_puma(
     "cFam_incpov_ratio_cat_with130", 
     "Combo of Family Work Eligibility and Income-to-Poverty Aligned with Program Eligibility Thresholds")
@@ -168,42 +168,7 @@ ggplot() +
 
 ### Results of SAE Estimation
 
-```{r setup run options based on local ccdf details}
-# Categories of income-to-poverty ratios available in the ACS 5-year data
-# "r0to50", "r50to74", "r75to99", "r100to124", "r125to149", "r150to174", "r175to184", 
-# "r185to199", "r200to299", "r300to399", "r400to499", "r500plus"
-
-# NSM -- Note: the `incpov_ranges_for_estimation`, which are predictors available
-# in the ACS 5-year data, do not strictly need to line up to the `incpov_spec_field` 
-# categories, which is constructed in ACS 1-year data. Strictly speaking, they just
-# need to be reasonable as predictors. However, because they are preserved in
-# the output, and since the ACS1 categories are how the SAE estimates are divided,
-# it's useful to build comparisons if there is alignment.
-
-incpov_ref_value  <- "0%-75%"  # "0%-100%"
-incpov_ranges_for_estimation <- c("0to50", "50to100", "100to199", "200to299")
-
-# For the sake of building comparisons of SAE estimates, and "now"-cast estimates, 
-# the specification of work_incpov is aligned with the local CCDF threshold. Thus,
-# the final now-cast CCDF eligibility status--which does not strictly need to 
-# align with even the SAE estimates--can be compared to AcS 1-year or SAE 
-# estimates by adding up work_incpov_status75 %in% c("work). Thus, if the 
-# CCDF threshold is 225 FPL, the SAE estimates `work_incpov_status75 %in% 
-# c("WorkElig_0%-75%", "WorkElig_75%-150%", "WorkElig_150%-225%")` could be
-# added to make a direct comparison.
-
-# Our current specification of `work_incpov_mix` embeds this alignment 
-# by adding the income threshold directly, in addition to the 100% for Head Start
-
-# /!\ GKFF -- need to supply multiple of these
-work_incpov_spec_field <- "work_incpov_mix"
-
-```
-
-
 ```{r set specifications for sae}
-
-# /!\ GKFF -- update specifications with new 01d measures
 
 sae_controls_incpov_stems <- 
   c(
@@ -243,12 +208,13 @@ sae_controls_2064_incwork   <- c(sae_controls_incpov_Age20to64, sae_controls_ed,
 sae_controls_65plus_inc     <- c(sae_controls_incpov_Age65plus, sae_controls_ed)
 sae_controls_65plus_incwork <- c(sae_controls_incpov_Age65plus, sae_controls_ed, sae_controls_workstatus)
 
-stopifnot(all(c(sae_controls_inc, sae_controls_incwork) %in% colnames(acs5tract)))
+#stopifnot(all(c(sae_controls_019_inc, sae_controls_019_incwork) %in% colnames(acs5tract)))
+stopifnot(all(c(sae_controls_2064_inc, sae_controls_2064_incwork) %in% colnames(acs5tract)))
 
 ```
 
 ```{r subset acs1 and acs5 data for the SAE}
-acs1_elig[j = PUMA := str_pad(PUMA, width = 5, side = "left", pad = "0")]
+acs1_elig <- mutate(acs1_elig, PUMA = pad_num_left(PUMA, 5))
 stopifnot(all(geo_crosswalk$PUMA %in% acs1_elig$PUMA))
 
 acs1_elig019_sae    <- filter(acs1_elig, between(AGEP,  0, 19))
