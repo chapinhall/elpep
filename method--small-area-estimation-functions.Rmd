@@ -113,25 +113,27 @@ run_sae <- function(direct_ests,                 # Direct, tract-level estimates
   # Prepare input data --------------------------------------------------------#
   
   # Copy and subset the auxiliary data used for modeling
-  #browser()
+  # browser()
   aux_data_use <- 
     # Note: because we use data.table functions for calculating fields, we 
     # use `copy()` to avoid adjusting the original data with by-reference operations
     copy(aux_data) %>% 
     merge(geo_crosswalk %>% select(GEOID, PUMA) %>% unique(), 
           by = "GEOID") %>%
-    .[PUMA %in% direct_ests$PUMA,
-      c("GEOID", "PUMA", aux_controls, aux_n, aux_n_se),
-      with = FALSE] %>% 
+    filter(
+      PUMA %in% direct_ests$PUMA
+    ) %>% 
+    select(all_of(c("GEOID", "PUMA", aux_controls, aux_n, aux_n_se))) %>% 
     setnames(old = c(aux_n,   aux_n_se), 
              new = c("aux_n", "aux_n_se")) %>% 
+    as.data.table() %>% 
     # Calculate PUMA-level sums for adjusting standard errors at the end
     .[j = n_pt := aux_n] %>% 
     .[j = n_p  := sumNA(n_pt), by = PUMA]
-  
-  aux_n <- nrow(aux_data_use)
+ 
+  aux_n        <- nrow(aux_data_use)
   aux_data_use <- na.omit(aux_data_use)
-  aux_n_omit <- nrow(aux_data_use)
+  aux_n_omit   <- nrow(aux_data_use)
   if (aux_n_omit != aux_n) print(glue("{aux_n - aux_n_omit} rows were removed due to missings in the ACS5 data"))
   
     
@@ -189,7 +191,7 @@ run_sae <- function(direct_ests,                 # Direct, tract-level estimates
     selected_fm <- fm
   }
   
-  #browser()
+  # browser()
   fh_tract <- fh(fixed = selected_fm,
                  vardir = "share_mse", 
                  combined_data = combined_data_tract,
