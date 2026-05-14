@@ -463,9 +463,9 @@ cps_family_elig <-
     fam_incpov_ratio = faminc_draw / fpl,
     
     # Bin family income
-    cFam_incpov_ratio_cat_mix     = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = c(0, 0.50, 1.00, 2.00, 4.00)),
+    # cFam_incpov_ratio_cat_mix     = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = c(0, 0.50, 1.00, 2.00, 4.00)),
     cFam_incpov_ratio_cat_by100   = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = seq(0, 4, by = 1.0)),
-    cFam_incpov_ratio_cat_hs_prog = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = c(0, 1.00, prog_inc_thresh_fpl/100, 4.00)),
+    # cFam_incpov_ratio_cat_hs_prog = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = c(0, 1.00, prog_inc_thresh_fpl/100, 4.00)),
     cFam_incpov_ratio_cat_with130 = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = c(0, 0.75, 1.30, 2.00, 4.00)),
     # fam_incpov_ratio_cat_by50    = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = seq(0, 4, by = 0.5)),
     # fam_incpov_ratio_cat_by75    = bin_incpov_ratio(fam_incpov_ratio, pov_breaks = c(0, 0.75, 1.50, 2.25, 4.00)),
@@ -477,12 +477,12 @@ cps_family_elig <-
     
     # Generate partition combining work and income bracket status
     cWork_incpov_status130 = paste_(cWorkElig, cFam_incpov_ratio_cat_with130),
-    cWork_incpov_status100 = paste_(cWorkElig, cFam_incpov_ratio_cat_by100),
-    cWork_incpov_statushs  = paste_(cWorkElig, cFam_incpov_ratio_cat_hs_prog),
+    # cWork_incpov_status100 = paste_(cWorkElig, cFam_incpov_ratio_cat_by100),
+    # cWork_incpov_statushs  = paste_(cWorkElig, cFam_incpov_ratio_cat_hs_prog),
     
     cWorkThresh_incpov_status130 = paste_(cWorkEligThresh, cFam_incpov_ratio_cat_with130),
-    cWorkThresh_incpov_status100 = paste_(cWorkEligThresh, cFam_incpov_ratio_cat_by100),
-    cWorkThresh_incpov_statushs  = paste_(cWorkEligThresh, cFam_incpov_ratio_cat_hs_prog),
+    # cWorkThresh_incpov_status100 = paste_(cWorkEligThresh, cFam_incpov_ratio_cat_by100),
+    # cWorkThresh_incpov_statushs  = paste_(cWorkEligThresh, cFam_incpov_ratio_cat_hs_prog),
     
     # Develop income measures to be used as outcomes of nowcasting
     bIncpov_le50  = 1*(fam_incpov_ratio <= 0.50),
