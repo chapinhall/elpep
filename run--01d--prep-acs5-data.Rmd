@@ -249,11 +249,12 @@ acs5_hhtype <-
   filter(
      str_detect(own_kids_under18, "All"),
     !str_detect(pov_status, "All"),
-    !str_detect(family_type, "All|Unmarried")
+    !str_detect(family_type, "All|Unmarried$")
   ) %>% 
   construct_fields(
     numerator = "family_type"
   )
+
 
 ```
 
@@ -566,7 +567,7 @@ acs5_workelig_all_denom <-
 # Ensure we have isolated the desired conditions
 if (FALSE) {
   inspect_fields(acs5_workelig_withKids_denom, show_all_combos = TRUE)  
-  inspect_fields(acs5_workelig_all_denom, show_all_combos = TRUE)  
+  inspect_fields(acs5_workelig_all_denom,      show_all_combos = TRUE)  
 }
 ```
 
