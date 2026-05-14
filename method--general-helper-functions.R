@@ -334,19 +334,19 @@ get_fpl_thresh_for_prog <- function(fam_size_calc = 4) {
     custom_inc_thresh_fam4 <- 
       custom_income_thresh %>% 
       filter(fam_size == fam_size_calc) %>% 
-      pull(inc_thresh)*(local_ccdf_incratio_base/100)
+      pull(inc_thresh)*(local_prog_incratio_base/100)
     
     fpl_fam4 <- 
       fpl_by_year %>% 
       filter(fpl_fam_size == fam_size_calc) %>% 
       pull(glue("fpl_{base_year}"))
     
-    ccdf_inc_thresh_fpl <- 
+    prog_inc_thresh_fpl <- 
       (custom_inc_thresh_fam4 / fpl_fam4)*100
   } else {
-    ccdf_inc_thresh_fpl <- local_ccdf_incratio_base  
+    prog_inc_thresh_fpl <- local_prog_incratio_base  
   }  
-  return(ccdf_inc_thresh_fpl)
+  return(prog_inc_thresh_fpl)
 }
 
 
