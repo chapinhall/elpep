@@ -24,6 +24,8 @@ ep <- function(x) eval(parse(text = x))
 ### Pull Census data -----------------------------------------------------------
 #------------------------------------------------------------------------------#
 
+#tidycensus::census_api_key(census_key, install = TRUE, overwrite = TRUE)
+
 pull_table <- function(table_name, 
                        geography = "tract", 
                        state = "IL", 
@@ -31,23 +33,94 @@ pull_table <- function(table_name,
                        survey = "acs5", 
                        year = 2021,
                        cache_table = TRUE,
-                       add_meta = TRUE) {
+                       add_meta = TRUE,
+                       use_url_pull = FALSE,
+                       ...) {
   
-  table_pull <- 
-    get_acs(table = table_name,
-            geography = geography,
-            state = state,
-            county = county,
-            survey = survey, 
-            year = year,
-            cache_table = cache_table) %>% 
-    select(-NAME) %>% 
-    mutate(se = moe / 1.645)
+  if (use_url_pull) {
+    url <- glue("https://api.census.gov/data/{year}/acs/acs5?get=group({table_name})&for=tract:*&in=state:{my_state_fip}&key={census_key}")
+    
+    raw <- fromJSON(url) 
+    table_pull <- 
+      raw %>%
+      {\(x) setNames(as.data.frame(x[-1, ], stringsAsFactors = FALSE), x[1, ])}() %>% 
+      select(-matches("(MA|EA)$")) %>% 
+      mutate(
+        across(
+          matches(table_name),
+          as.numeric)
+      ) %>% 
+      pivot_longer(
+        cols = -c("GEO_ID", "NAME", "state", "county", "tract"),
+        names_to = "variable"
+      ) %>% 
+      mutate(
+        stat = 
+          case_match(
+            str_extract(variable, "\\w$"),
+            "E" ~ "estimate",
+            "M" ~ "moe"
+          ),
+        variable = str_replace(variable, "(.+\\d)(M|E)", "\\1")
+      ) %>% 
+      pivot_wider(
+        names_from = stat,
+        values_from = value
+      ) %>% 
+      mutate(
+        se = moe / 1.645
+      ) %>% 
+      mutate(
+        GEOID = str_replace(GEO_ID, ".+US", "")
+      ) %>% 
+      select(-NAME, -tract, -state, -county, -GEO_ID)
+    
+  } else {
+    table_pull <- 
+      get_acs(
+        table = table_name,
+        geography = geography,
+        state = state,
+        county = county,
+        survey = survey, 
+        year = year,
+        cache_table = cache_table
+      ) %>% 
+      select(-NAME) %>% 
+      mutate(se = moe / 1.645)
+  }
+  
   
   # Develop and apply metadata
   if (add_meta) {
-    my_meta <- 
-      get_acs5_metadata(year)
+    if (use_url_pull) {
+      # https://api.census.gov/data/2021/acs/acs5/variables.json?key=8b24ac0e60205471267cecd02fa45e7575082313
+      # https://api.census.gov/data/2021/acs/acs5/groups/{table_name}.json?key=8b24ac0e60205471267cecd02fa45e7575082313
+      url <- glue("https://api.census.gov/data/2021/acs/acs5/groups/{table_name}.json?key={census_key}")
+      raw <- fromJSON(url)$variables
+      my_meta <- 
+        lapply(
+          names(raw), 
+          \(x) {
+            data.frame(
+              name = x, 
+              label = raw[[x]]$label,
+              concept = raw[[x]]$concept
+            )
+          }
+        ) %>% 
+        bind_rows() %>% 
+        filter(
+          str_detect(name, "EA$")
+        ) %>% 
+        mutate(
+          name = str_replace(name, "EA$", "")
+        )
+    } else {
+      my_meta <- 
+        get_acs5_metadata(year) %>%
+        filter(str_detect(name, table_name))
+    }
     
     if (FALSE) {
       my_meta <- 
@@ -56,14 +129,15 @@ pull_table <- function(table_name,
     }
     
     table_pull <-
-      merge(table_pull,
-            my_meta %>% 
-              filter(str_detect(name, table_name)) %>% 
-              develop_meta() %>% 
-              select(-label, -concept) %>% 
-              rename(variable = name),
-            by = "variable",
-            all.x = TRUE)
+      merge(
+        table_pull,
+        my_meta %>% 
+          develop_meta() %>% 
+          select(-label, -concept) %>% 
+          rename(variable = name),
+        by = "variable",
+        all.x = TRUE
+      )
   }
   
   return(table_pull)
@@ -97,7 +171,7 @@ develop_meta <- function(table_meta, verbose = FALSE) {
     table_meta %>% 
     mutate(
       table = str_replace(name, "(\\w\\d+)\\w?_.+", "\\1")
-    ) 
+    )
   
   if (n_distinct(table_meta$table) > 1) stop("Expected only a single census table")
   
@@ -201,6 +275,7 @@ develop_meta <- function(table_meta, verbose = FALSE) {
   }
   
   # Recode Income to Poverty Ratio ---------------------------------------------
+  
   if (any(str_detect(my_concepts, "RATIO OF INCOME TO POVERTY LEVEL"))) {
     #table_meta <- filter(my_meta, str_detect(name, "B17026"))
     table_meta <- 
@@ -211,10 +286,10 @@ develop_meta <- function(table_meta, verbose = FALSE) {
           str_replace(".*(!!|^)(\\d*)\\.(\\d+) to (\\d*)\\.(\\d+)(!!|$)", "IncPov\\2\\3to\\4\\5") %>%
           str_replace(".*(!!|^)(\\d*)\\.(\\d+) and over.*",               "IncPov\\2\\3plus") %>%
           str_replace(".*(!!|^)Under (\\d*)\\.(\\d+).*",                  "IncPov0to\\2\\3") %>%
-          str_replace("^Estimate.+",                                      "All"))
+          str_replace("^(Annotation of )?Estimate.+",                     "All"))
   }
   
-  # Recode Income to Poverty Status --------------------------------------------
+  # Recode Poverty Status ------------------------------------------------------
   if (any(str_detect(my_concepts, "POVERTY STATUS"))) {
     #table_meta <- filter(my_meta, str_detect(name, "B17012"))
     table_meta <- 
@@ -681,7 +756,7 @@ construct_fields <-
             by = c("GEOID", by_vars)) %>% 
       mutate(r = numer_n / denom_n,
              r_se = se_ratio(numer_n, denom_n, numer_se, denom_se)) %>% 
-      select(all_of("GEOID", by_vars, "numerator", "r", "r_se", "numer_n", "numer_se", "denom_n")) %>% 
+      select(all_of(c("GEOID", by_vars, "numerator", "r", "r_se", "numer_n", "numer_se", "denom_n"))) %>% 
       rename(se_r = r_se, 
              n = numer_n,
              se_n = numer_se,

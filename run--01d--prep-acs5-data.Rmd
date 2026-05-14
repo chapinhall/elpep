@@ -40,7 +40,9 @@ pull_my_table <-
       my_table,
       state = my_state_abbr, 
       county = county_arg,
-      year = acs5_year
+      year = acs5_year,
+      use_url_pull = TRUE,
+      key = census_key
     )
   }
 ```
@@ -74,13 +76,13 @@ acs5_sex_by_age_pull <- pull_my_table("B01001")
     
 inspect_fields(
   acs5_sex_by_age_pull, 
-  show_all_combos = TRUE
+  show_all_combos = FALSE
 )
 
 acs5_pop_by_age <- 
   acs5_sex_by_age_pull %>% 
   filter(
-    age != "All"
+    !str_detect(age, "All")
   ) %>% 
   construct_fields(
     numerator = "age"
@@ -194,7 +196,7 @@ inspect_fields(
 acs5_pop_by_age_lt18 <- 
   acs5_pop_lt18_pull %>% 
   filter(
-    age != "All",
+    !str_detect(age, "All"),
     residence_type != "InGQ"
   ) %>% 
   construct_fields(
@@ -217,7 +219,7 @@ inspect_fields(
 acs5_pov_bySexAge <- 
   acs5_pov_bySexAge_pull %>% 
   filter(
-    age != "All",
+    !str_detect(age, "All")
   ) %>% 
   construct_fields(
     numerator = "pov_status",
@@ -246,9 +248,9 @@ inspect_fields(
 acs5_hhtype <- 
   acs5_pov_byNumKids_pull %>% 
   filter(
-    own_kids_under18 == "All",
-    pov_status != "All",
-    !family_type %in% c("All", "Unmarried")
+     str_detect(own_kids_under18, "All"),
+    !str_detect(pov_status, "All"),
+    !str_detect(family_type, "All|Unmarried")
   ) %>% 
   construct_fields(
     numerator = "family_type"
@@ -276,8 +278,8 @@ inspect_fields(
 acs5_incpov_byage_prep <- 
   acs5_incpov_byage_pull %>% 
   filter(
-    age != "All",
-    inc_to_pov_ratio != "All"
+    !str_detect(age, "All"),
+    !str_detect(inc_to_pov_ratio, "All")
   ) %>% 
   mutate(
     age_agg =
@@ -296,7 +298,7 @@ acs5_incpov_byage_prep <-
         str_detect(inc_to_pov_ratio, "IncPov(400to|500plus)")           ~ "IncPov400plus"
       )
   )
-  
+
 # Examine output mappings
 acs5_incpov_byage_prep %>% 
   select(age, age_agg) %>% 
@@ -314,8 +316,8 @@ acs5_incpov_byage_prep %>%
 acs5_incpov_byage <- 
   acs5_incpov_byage_prep %>% 
   construct_fields(
-    numerator = "inc_to_pov_ratio",
-    by_vars = "age"
+    numerator = "inc_to_pov_ratio_agg",
+    by_vars = "age_agg"
   )
 ```
 
@@ -334,7 +336,7 @@ inspect_fields(
 acs5_incpov_byage <- 
   acs5_incpov_fam_pull %>% 
   filter(
-    inc_to_pov_ratio != "All"
+    !str_detect(inc_to_pov_ratio, "All")
   ) %>% 
   construct_fields(
     numerator = "inc_to_pov_ratio"
@@ -344,7 +346,7 @@ acs5_incpov_byage <-
 acs5_incpov_byage <- 
   acs5_incpov_fam_pull %>% 
   filter(
-    inc_to_pov_ratio != "All"
+    str_detect(inc_to_pov_ratio, "All")
   )
 
 ```
@@ -362,7 +364,7 @@ inspect_fields(
 acs5_raceeth4 <- 
   acs5_raceeth_pull %>% 
   filter(
-    race != "All",
+    !str_detect(race, "All"),
     hispanic != "Hisp"
   ) %>% 
   mutate(
@@ -419,7 +421,7 @@ inspect_fields(
 acs5_empl_prep_Age22to64 <- 
   acs5_empl_pull %>% 
   filter(
-    sex != "All",
+    !str_detect(sex, "All"),
     str_detect(age, "Age(22|25|30|35|45|55|60|62)to")
   )
 
@@ -428,7 +430,7 @@ acs5_empl <-
   filter(
     lfp == "InLF",
     pop == "Civilian",
-    status != "All"
+    !str_detect(status, "All")
   ) %>% 
   construct_fields(
     numerator = "status", 
@@ -452,7 +454,7 @@ acs5_empl_inclMilit <-
   filter(
     lfp == "InLF",
     pop %in% c("Civilian", "Military"),
-    status != "All"
+    !str_detect(status, "All")
   ) %>% 
   construct_fields(
     numerator = "status", 
@@ -480,8 +482,8 @@ acs5_lfrate <-
 acs5_lfrate_inclMilit <- 
   acs5_empl_prep_Age22to64 %>% 
   filter(
-    lfp != "All",
-    pop == "All"
+    !str_detect(lfp, "All"),
+    str_detect(pop, "All")
   ) %>%
   mutate(
     lfp = 
@@ -514,7 +516,7 @@ inspect_fields(
 acs5_edattain_bySex <- 
   acs5_edattain_pull %>% 
   filter(
-    sex != "All"
+    !str_detect(sex, "All")
   ) %>% 
   construct_fields(
     numerator = "ed_attain",
@@ -524,7 +526,7 @@ acs5_edattain_bySex <-
 acs5_edattain <- 
   acs5_edattain_pull %>% 
   filter(
-    sex != "All"
+    !str_detect(sex, "All")
   ) %>% 
   construct_fields(
     numerator = "ed_attain"
@@ -538,6 +540,8 @@ acs5_edattain <-
 <!-- with calculations rather than seeking complex implementations of `construct_fields()` -->
 
 ```{r identify the denominator for all-adults-working status}
+acs5_famconfig_wKids_raw <- pull_my_table("B23007")
+
 inspect_fields(acs5_famconfig_wKids_raw)
 inspect_fields(acs5_famconfig_wKids_raw, show_all_combos = TRUE)
 
@@ -554,10 +558,10 @@ acs5_workelig_withKids_denom <-
 acs5_workelig_all_denom <- 
   acs5_famconfig_wKids_raw %>% 
   filter(
-    own_kids_under18 != "All",
+    !str_detect(own_kids_under18, "All"),
     family_type %in% c("Married", "UnmarriedMaleHh", "UnmarriedFemaleHh"),
-    lfp == "All",
-    status == "All"
+    str_detect(lfp, "All"),
+    str_detect(status, "All")
   )
 
 # Ensure we have isolated the desired conditions
@@ -580,7 +584,7 @@ acs5_workelig_withKids_num <-
 acs5_workelig_all_num <- 
   acs5_famconfig_wKids_raw %>% 
   filter(
-    own_kids_under18 != "All",
+    !str_detect(own_kids_under18, "All"),
     (family_type == "Married" & status == "HusbandEmplWifeEmpl") | 
       (str_detect(family_type, "Unmarried") & status == "Empl")
   )
@@ -673,7 +677,7 @@ acs5_tomerge <-
     acs5_pop_by_age_agg,
     #acs5_pop_by_age_lt18, # This includes duplicates to acs5_pop_by_age. Is left out until needed.
     #acs5_pov_bySexAge, 
-    acs5_incpov_byage_out, 
+    acs5_incpov_byage, 
     acs5_raceeth4, 
     acs5_hhtype,
     acs5_empl, 
@@ -706,23 +710,44 @@ save(
 ## Examine Maps of Selected ACS5 Measures
 
 ```{r map building code}
-make_acs5_map <- function(my_dat, my_field, my_label) {
+make_acs5_map <- function(my_dat, my_field, my_label, use_aux = TRUE) {
+  
+  if (use_aux) {
+    myShp <- auxShp
+  } else {
+    myShp <- tractShp
+  }
+  
+  bbox <- sf::st_bbox(myShp) 
+  
   geo_data <- 
     tractShp %>% 
     merge(
-      my_dat %>% select(all_of(c("GEOID", my_field))),
+      my_dat %>% select(all_of(c("GEOID", my_field))) %>% filter(get(my_field) < 1),
       by = c("GEOID")
     )
   
-  bbox <- sf::st_bbox(tractShp)
-  
-  geo_data %>% 
+  base_plot <- 
+    geo_data %>% 
     ggplot() +
     geom_sf(
       aes(
         fill = get(my_field)
       )
-    ) + 
+    )
+  
+  if (use_aux) {
+    base_plot <- 
+      base_plot + 
+      geom_sf(
+        data = auxShp,
+        color = "white",
+        fill = NA,
+        linewidth = 1
+      )
+  }
+  
+  base_plot + 
     geom_sf(
       data = pumaShp,
       color = "orange",
@@ -740,7 +765,6 @@ make_acs5_map <- function(my_dat, my_field, my_label) {
       plot.title = element_text(hjust = 0.5)
     ) +
     theme_void() +
-    
     coord_sf(
       xlim = c(bbox["xmin"], bbox["xmax"]),
       ylim = c(bbox["ymin"], bbox["ymax"]),
@@ -749,8 +773,8 @@ make_acs5_map <- function(my_dat, my_field, my_label) {
 
 }
 
-make_acs5_map(acs5tract,      "rIncPov0to100_Age18to64",  "% in Poverty")
-make_acs5_map(acs5tract,      "rIncPov500plus_Age18to64", "% over 500% FPL")
+make_acs5_map(acs5tract,      "rIncPov0to75_Age18to64",   "% < 75% FPL")
+make_acs5_map(acs5tract,      "rIncPov400plus_Age18to64", "% over 400% FPL")
 
 make_acs5_map(acs5tract,      "rEdLtHs", "% Less than HS Degree")
 make_acs5_map(acs5tract,      "rEdColl", "% College Educated")
