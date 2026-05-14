@@ -144,7 +144,6 @@ if (FALSE) {
   sort(sort_by_char_nums(acs5_pop_by_age_aug$age %>% unique())) %>% as.character()  
 }
 
-
 # Add key population ranges
 acs5_pop_by_age_custom <- 
   acs5_pop_by_age_aug %>% 
@@ -160,7 +159,7 @@ acs5_pop_by_age_custom <-
       )
     ) %>% 
   filter(
-    age_agg %in% c("Age0to18", "Age19to64", "Age65plus")
+    age_agg %in% c("Age0to19", "Age20to64", "Age65plus")
   )
 
 if (FALSE) {

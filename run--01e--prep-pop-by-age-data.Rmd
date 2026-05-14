@@ -43,7 +43,7 @@ for (f in c("geo", "acs1", "acs5")) {
 ageCounts_t <- 
   acs5tract %>% 
   select(
-    matches("GEOID|^rAge")
+    matches("GEOID|^nAge")
   )
 ```
 
@@ -63,7 +63,7 @@ stopifnot(nrow(ageCounts_t) == nrow(ageCounts_pt))
 ```{r function to build acs1 counts within age range}
 get_puma_totals <- function(bounds) {
   
-  stopifnot(all(bounds %in% acs1_elig$AGEP))
+  stopifnot(all(setdiff(bounds, Inf) %in% acs1_elig$AGEP))
   acs1_elig %>% 
     filter(
       between(AGEP, bounds[1], bounds[2])
@@ -123,8 +123,8 @@ get_age_bounds <- function(age_var) {
   return(bounds)
 }
 
-stopifnot(get_age_bounds("rAge0to18")  == c( 0, 18))
-stopifnot(get_age_bounds("rAge19to64") == c(19, 64))
+stopifnot(get_age_bounds("rAge0to19")  == c( 0, 19))
+stopifnot(get_age_bounds("rAge20to64") == c(20, 64))
 stopifnot(get_age_bounds("rAge65plus") == c(65, Inf))
 ```
 
@@ -153,7 +153,9 @@ calibrate_counts <- function(age_var) {
 
 # Sanity checks
 if (FALSE) {
-  x <- calibrate_counts("rAge0to18")
+  # my_n_field <- "nAge0to19"
+  my_n_field <- "nAge65plus"
+  x <- calibrate_counts(my_n_field)
   x %>% select(PUMA, calib_mult) %>% unique() %>% pull(calib_mult) %>% hist()
   x %>% 
     filter(
@@ -161,7 +163,7 @@ if (FALSE) {
     ) %>% 
     ggplot() +
     aes(
-      x = rAge0to18,
+      x = get(my_n_field),
       y = calib
     ) + 
     geom_point() + 
@@ -194,9 +196,9 @@ batch_calibrations <- function(age_vars) {
 pop_age_t_calib <- 
   batch_calibrations(
     c(
-      "rAge0to18",
-      "rAge19to64",
-      "rAge65plus"
+      "nAge0to19",
+      "nAge20to64",
+      "nAge65plus"
     )
   )
 
