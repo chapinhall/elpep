@@ -21,9 +21,9 @@ for (f in c("geo", "cps", "acs5", "pop")) {
 }
 
 # Load SAE estimates
-# load(file = glue("{output_path}sae_sensitivity_estimates_final_{my_output_tag}.Rda"))
 load(file = glue("{output_path}sae_sensitivity_estimates_{my_output_tag}.Rda")) 
 ```
+
 
 ## Implement the Now-Casting Method
 
@@ -55,35 +55,46 @@ most_recent_sy_months <-
 
 cps_reg_sample_most_recent    <- filter(cps_trans, YEAR_MONTH_p %in% most_recent_months)
 cps_reg_sample_most_recent_sy <- filter(cps_trans, YEAR_MONTH_p %in% most_recent_sy_months)
-cps_reg_sample_allbase        <- filter(cps_trans, YEAR_b == base_year)
+cps_reg_sample_allbase        <- filter(cps_trans, YEAR == base_year)
 
 ```
 
 ```{r pivot SAE measures wide}
-# Reshape the SAE data wide for the sake of prediction.
+# Reshape the SAE data wide for the sake of prediction
+# Preserve only the values needed for now-casting:
+# - tract
+# - value of the SAE category predicted to that level
+# - estimated share
+# This is reshaped wide for each value to be used in prediction, when applying 
+# coefficients estimated via analysis of CPS
+
 pivot_sae_wide <- function(sae_spec, share_var) {
   sae_spec[["sae_out_decompress"]] %>% 
-    select(one_of(c("GEOID", "vc_value", share_var))) %>% 
-    mutate(vc_value = paste0("share_", vc_value) %>% 
-             str_replace_all("%|\\+", "") %>% 
-             str_replace_all("-", "_")) %>%
-    pivot_wider(id_cols = c("GEOID"), 
-                names_from = vc_value, 
-                values_from = share_var)
+    select(
+      all_of(c("GEOID", "vc_value", share_var))
+    ) %>% 
+    mutate(
+      vc_value = paste0("share_", vc_value) %>% 
+        str_replace_all("%|\\+", "") %>% 
+        str_replace_all("-", "_")
+    ) %>%
+    pivot_wider(
+      id_cols = c("GEOID"), 
+      names_from = vc_value, 
+      values_from = share_var
+    )
 }
 ```
 
 ```{r develop list of predictors for transition/now-casting}
-# Develop controls
+
+# Set control lists
 
 # /!\ Other predictors to consider building include:
-# - presence of spouse, 
 # - labor force participation
 # - employment status
 # - race/ethnicity and
 # - industry of employment
-# We have started with a single measure--education--for proof of concept, and as
-# a strong correlate of other factors
 
 # These are all fields relevant to predicting post-period status
 
@@ -92,16 +103,22 @@ sae_controls_workstatus <-
     "rUnmarriedFemaleHh", "rUnmarriedMaleHh")
 
 transition_pred_vars_acs5 <- 
-  c("rEdLtHs", "rEdSomeColl", "rEdAssoc", "rEdColl", "rEdGrad",
+  c("rEduc_LtHs", "rEduc_SomeColl", "rEduc_Coll", "rEduc_Grad",
     "rUnmarriedFemaleHh", "rUnmarriedMaleHh")
 
 # Set reference group categories
 transition_pred_vars_toomit <- 
-  c("rEdHs", "rMarried")
-  # ... Currently choosing to allow these reference variables to be included,
-  # because we want to have them show up in "unconditional" regressions (where)
-  # each level effectively estimates its average. To enable this, we're estimating
-  # the regressions without intercepts.
+  c("rEduc_Hs", "rMarried")
+  # These values are removed because they are colinear with other predictors
+  # However, in some specifications we add them back in and remove the intercept
+  # to, in effect, estimate average levels associated with each stats.
+
+stopifnot(
+  all(
+    c(sae_controls_workstatus, transition_pred_vars_acs5, transition_pred_vars_toomit) %in%
+    colnames(acs5tract)
+  )
+)
 ```
 
 ```{r subset acs 5-year data that is relevant based on the specification}
@@ -111,7 +128,7 @@ transition_pred_vars_toomit <-
 acs5_keep_vars <- 
   c("GEOID", "COUNTYFIP",
     "nAge0to19", "nAge20to64", "nAge65plus",
-    transition_pred_vars_acs5,
+    transition_pred_vars_acs5, transition_pred_vars_toomit,
     sae_controls_list) %>% 
   unlist() %>% 
   unique()
@@ -122,25 +139,45 @@ acs5tract_reg <-
 
 if (exists("my_county_fip")) {
   acs5tract_reg <- 
-    acs5tract_reg[COUNTYFIP == my_county_fip]
+    acs5tract_reg %>% 
+    filter(
+      COUNTYFIP == my_county_fip
+    )
 }
 ```
 
 ```{r subset population data to useful content}
 pop_for_nowcast <- 
-  pop_by_age %>% 
-  filter(year == base_year + 1) %>% 
-  mutate(age_0to5_se  = 0,
-         age_6to12_se = 0) %>% 
-  select(GEOID = GEOID_TR20, age_0to5_count, age_0to5_se, age_6to12_count, age_6to12_se)
+  pop_age_t_calib_wide %>% 
+  select(GEOID, nAge0to19, nAge20to64, nAge65plus) %>% 
+  mutate(
+    nAge0to19_se  = 0,
+    nAge20to64_se = 0,
+    nAge65plus_se = 0
+  )
+  
 ```
 
 
 ```{r set a function for estimating a single run of transition estimation}
-estimate_transition_counts <- function(sae_spec_name, share_calc_var, outcome_var, transition_data, age_prefix) {
+estimate_transition_counts <- 
+  function(
+    sae_spec_name, 
+    share_calc_var, 
+    outcome_var, 
+    transition_data, 
+    age_prefix,
+    work_field = "bWork_metHrsThresh_elig",
+    spouse_field = "bSpousePresent"
+      # /*\ The default for these last two arguments may be worth examining, and/or
+      # adjusting via function calls in the implementation
+    ) {
    
-  sae_wide <- pivot_sae_wide(get(sae_spec_name),
-                             share_calc_var)
+  sae_wide <- 
+    pivot_sae_wide(
+      get(sae_spec_name),
+      share_calc_var
+    )
   
   # Ensure that the fields in the sae data are represented in the cps data
   vc_vals <- cn(sae_wide) %>% setdiff("GEOID")
@@ -153,31 +190,46 @@ estimate_transition_counts <- function(sae_spec_name, share_calc_var, outcome_va
     cSpouse <- str_extract(vc_val, "(_SpousePresent|NoSpousePresent)")
     
     # Extract all incpov information if present
-    vIncpov <- str_extract_all(vc_val, "\\d+|ccdf") %>% unlist()
-    vIncpov[vIncpov == "ccdf"] <- as.character(local_ccdf_incratio_base)
+    # If `prog` is mentioned, we take it to refer to the base program eligibility
+    # threshold, and replace it with that information that the user has specified
+    vIncpov <- str_extract_all(vc_val, "\\d+|prog") %>% unlist()
+    vIncpov[vIncpov == "prog"] <- as.character(local_prog_incratio_base)
     vIncpov <- as.numeric(vIncpov)
     
-    # Select CCDF eligibility 
-    
+    # Build program eligibility 
+    # At present, this code rebuilds flags for eligibility in the `cps_trans`
+    # data that parallel the SAE fields (and thus the category encodings from the)
+    # ACS1 data, using the name
+    # /!\ It may be worth considering whether this approach or requiring a parallel
+    # construction more intentionally built in the CPS data transform code is
+    # more desirable ... the approach is relatively more preferable, the more that
+    # the CPS (and ACS1) builds are automated, e.g. to the extent that user
+    # input sets the build of categorizations without need for user input
     transition_data <- 
       transition_data %>% 
       .[j = c(vc_val) := 
           # Build work eligibility qualifier if indicated
-          case_when(is.na(cWork)              ~ 1,
-                    str_detect(cWork, "Not")  ~ 1 - ccdf_elig_tight,
-                    TRUE                      ~     ccdf_elig_tight) *
+          case_when(
+            is.na(cWork)              ~ 1,
+            str_detect(cWork, "Not")  ~ 1 - get(work_field),
+            TRUE                      ~     get(work_field)
+          ) *
           
           # Build presence of spouse if indicated
-          case_when(is.na(cSpouse)            ~ 1,
-                    str_detect(cSpouse, "No") ~ 1 - spouse_present,
-                    TRUE                      ~     spouse_present) *
+          case_when(
+            is.na(cSpouse)            ~ 1,
+            str_detect(cSpouse, "No") ~ 1 - get(spouse_field),
+            TRUE                      ~     get(spouse_field)
+          ) *
           
           # Note: 01b bins income using [lower, upper) inclusions -- i.e., 
           # closed lower limit, open upper. We do this by hand because between()
           # uses closed lower and upper (likely a very small point).
-          case_when(length(vIncpov) == 0 ~  1,
-                    length(vIncpov) == 1 ~  fam_incpov_ratio_b*100 >= vIncpov[1],
-                    TRUE                 ~ (fam_incpov_ratio_b*100 >= vIncpov[1])*(fam_incpov_ratio_b*100 < vIncpov[2]))]
+          case_when(
+            length(vIncpov) == 0 ~  1,
+            length(vIncpov) == 1 ~  fam_incpov_ratio_b*100 >= vIncpov[1],
+            TRUE                 ~ (fam_incpov_ratio_b*100 >= vIncpov[1])*(fam_incpov_ratio_b*100 < vIncpov[2])
+          )]
       
   }
   
@@ -199,33 +251,51 @@ estimate_transition_counts <- function(sae_spec_name, share_calc_var, outcome_va
     # <run the above>
     transition_data[j = .N, by = .(fn = share_NotWorkElig_SpousePresent, hand = 1*(!ccdf_elig_loose)*(spouse_present))] %>% unique()
   }
-    
+   
+  # Merge ACS5-derived predictors into the input SAE data 
   pred_data <- 
     sae_wide %>% 
-    merge(acs5tract_reg,
-          by = "GEOID",
-          all.x = TRUE) %>% 
-    # merge(pop_for_nowcast,
-    #       by = "GEOID",
-    #       all.x = TRUE) %>% 
-    merge(geo_crosswalk[j = .(GEOID, PUMA)] %>% unique(),
-          by = "GEOID",
-          all.x = TRUE) %>% 
+    merge(
+      acs5tract_reg,
+      by = "GEOID",
+      all.x = TRUE
+    ) %>% 
+    # Merge in population data not already found in the ACS5 data
+    merge(
+      pop_for_nowcast %>% 
+        select(
+          all_of(
+            c("GEOID", 
+              setdiff(cn(pop_for_nowcast), cn(acs5tract_reg))
+            )
+          )
+        ),
+      by = "GEOID",
+      all.x = TRUE
+    ) %>%
+    merge(
+      geo_crosswalk[j = .(GEOID, PUMA)] %>% unique(),
+      by = "GEOID",
+      all.x = TRUE
+    ) %>% 
     data.table()
   
   pred_controls <- 
     c(transition_pred_vars_acs5,
-      vc_vals) %>% 
+      vc_vals
+    ) %>% 
     unique() %>% 
     setdiff(transition_pred_vars_toomit)
   
-  est_apply_trans(cps_trans_data  = transition_data,
-                  outcome_var     = outcome_var,
-                  pred_vars       = pred_controls,     
-                  vars_for_uncond = setdiff(vc_vals, transition_pred_vars_toomit),
-                  sae_acs5_vals   = pred_data, 
-                  count_var       = glue("{age_prefix}_count"),     
-                  count_se_var    = glue("{age_prefix}_se"))
+  est_apply_trans(
+    cps_trans_data  = transition_data,
+    outcome_var     = outcome_var,
+    pred_vars       = pred_controls,     
+    vars_for_uncond = setdiff(vc_vals, transition_pred_vars_toomit),
+    sae_acs5_vals   = pred_data, 
+    count_var       = glue("{age_prefix}"),     
+    count_se_var    = glue("{age_prefix}_se")
+  )
   
 }
 ```
@@ -241,42 +311,46 @@ For each count category of deep poverty, in poverty (i.e. Head Start eligibility
 nowcast_out <- NULL
 nowcast_betas_out <- NULL
 
-# /!\ Exclude the `wk_sp` specification at least temporarily since decompression
-# methods have not been built for it
-specs <- setdiff(specs, str_subset(specs, "wk_sp"))
-
 # Loop across CPS 
-for (cps_recency in c("most_recent", "allbase", "sy")) {
+for (cps_recency in c("most_recent", "allbase")) { # , "sy"
   
-  cps_reg_data <- switch(cps_recency,
-                         "most_recent" = cps_reg_sample_most_recent,
-                         "sy"          = cps_reg_sample_most_recent_sy,
-                         "allbase"     = cps_reg_sample_allbase)
+  # Note: unlike `case_match()`, the RHS of the conditions can return an
+  # object that doesn't conform to the first argument
+  cps_reg_data <- 
+    switch(
+      cps_recency,
+      "most_recent" = cps_reg_sample_most_recent,
+      "sy"          = cps_reg_sample_most_recent_sy,
+      "allbase"     = cps_reg_sample_allbase
+    )
   
   # Loop across CPS subsamples
   for (cps_geo_subsample in c("none", "metros")) {
     
     # Select subsample of CPS data, if applicable
     cps_reg_data_sample <- 
-      switch(cps_geo_subsample,
-             "none"   = cps_reg_data,
-             "metros" = cps_reg_data[METRO %in% 2:4])
+      switch(
+        cps_geo_subsample,
+        "none"   = cps_reg_data,
+        "metros" = cps_reg_data[METRO %in% 2:4]
+      )
     
     for (sae_spec in specs) {
       
       # Determine which outcomes to run with each SAE sensitivity specification.
       # We may want to be more selective, given both run-times and sensibilities
       # around modeling choices.
+      # `age_prefix` is used for both acs5 and population data
       
-      ages <- str_extract(sae_spec, "\\d+$")
+      ages <- str_extract(sae_spec, "\\d+")
       if (ages == "019") {
-        age_prefix <- "Age0to19"
-        cps_reg_use <- filter(cps_reg_data_sample, between(AGE, 0, 19))
+        age_prefix <- "nAge0to19"
+        cps_reg_use <- filter(cps_reg_data_sample, between(AGE,  0, 19))
       } else if (ages == "2064") {
-        age_prefix <- "Age20to64"
-        cps_reg_use <- filter(cps_reg_data_sample, between(AGE, 6, 12))
+        age_prefix <- "nAge20to64"
+        cps_reg_use <- filter(cps_reg_data_sample, between(AGE, 20, 64))
       } else if (ages == "65plus") {
-        age_prefix <- "Age65plus"
+        age_prefix <- "nAge65plus"
         cps_reg_use <- filter(cps_reg_data_sample, AGE >= 65)
       }
       
@@ -287,7 +361,7 @@ for (cps_recency in c("most_recent", "allbase", "sy")) {
           "share_fh_redis_pct01_infl"
         )
       
-      if (str_detect(sae_spec, "^inc_")) {
+      if (str_detect(sae_spec, "inc$")) {
         # Using the poverty estimates to predict poverty-related eligibility, 
         # as well as CCDF eligibility because why not. Also there's reason to 
         # believe that more parsimonious specifications may do better.
@@ -298,7 +372,7 @@ for (cps_recency in c("most_recent", "allbase", "sy")) {
             "bIncpov_le205"
           )
         
-      } else if (str_detect(sae_spec, "^incwork")) {
+      } else if (str_detect(sae_spec, "incwork$")) {
         outcome_vars <- str_subset(cn(cps_reg_use), "bProg_eligThresh_incpov_")
       }
     
@@ -350,10 +424,10 @@ nowcast_betas_out <- data.table(nowcast_betas_out)
 ```
 
 ```{r reorganize metadata in the nowcast output}
-nowcast_out <- 
+nowcast_out_labeled <- 
   nowcast_out %>% 
   mutate(
-    age = str_extract(sae_spec, "\\d+$"),
+    age = str_extract(sae_spec, "\\d+"),
     age = 
       case_match(
         age,
@@ -362,13 +436,14 @@ nowcast_out <-
         "65plus" ~ "Age65plus"
         
       ),
-    sae_spec = str_replace(sae_spec, "_\\d+$", ""))
+    sae_spec = str_replace(sae_spec, "\\d+_", "")
+  )
 ```
 
 ```{r examine share estimates outside of [0.0-1.0] and truncate}
 if (developer_mode) {
   # Examine frequency of 
-  nowcast_out %>% 
+  nowcast_out_labeled %>% 
     summarize(
       .by = c(sae_spec, outcome_var),
       elig_share_lt0 = mean(elig_share < 0) %>% percent(accuracy = .1),
@@ -376,24 +451,26 @@ if (developer_mode) {
     )
   
   # Examine magnitude of negative share estimates
-  nowcast_out %>% 
+  nowcast_out_labeled %>% 
     filter(elig_share < 0) %>% 
     select(elig_share) %>% 
     summary()
   
   # Visually examine which SAE and ACS5 values are associated with negative
   # estimates
-  nowcast_out %>% 
+  nowcast_out_labeled %>% 
     filter(elig_share < 0) %>% 
     View()
     # From a quick look, it simply seems that this is the case for tracts with 
     # very high shares of high income (>400% FPL) households
 }
 
-nowcast_out <- 
-  nowcast_out %>% 
-  mutate(elig_count = ifelse(elig_share < 0, 0, elig_count),
-         elig_share = ifelse(elig_share < 0, 0, elig_share))
+nowcast_out_trunc <- 
+  nowcast_out_labeled %>% 
+  mutate(
+    elig_count = ifelse(elig_share < 0, 0, elig_count),
+    elig_share = ifelse(elig_share < 0, 0, elig_share)
+  )
   # Standard errors are preserved given the very small adjustment of negative
   # values to zero. And although non-0 standard errors are not well behaved,
   # they are preserved given that they are necessary to reflect noise when
@@ -407,16 +484,22 @@ nowcast_out <-
 # Pull out key information of now-casting output from the larger set of output
 # which has more contextual fields
 key_nowcast_out <- 
-  nowcast_out %>% 
-  select(GEOID, outcome_var, elig_share, elig_share_se, elig_count, elig_count_se,
-         sae_spec, cps_base_recency, cps_geo_subsample)
+  nowcast_out_trunc %>% 
+  select(
+    GEOID, outcome_var, 
+    elig_share, elig_share_se, 
+    elig_count, elig_count_se,
+    sae_spec, cps_base_recency, cps_geo_subsample
+  )
 
-save(key_nowcast_out,
-     nowcast_out,
-     nowcast_betas_out,
-     most_recent_months,
-     most_recent_sy_months,
-     file = glue("{output_path}Eligibility estimates using conditional transition ratio - {my_output_tag}.Rda"))
+save(
+  key_nowcast_out,
+  nowcast_out_trunc,
+  nowcast_betas_out,
+  most_recent_months,
+  most_recent_sy_months,
+  file = glue("{output_path}Eligibility estimates using conditional transition ratio - {my_output_tag}.Rda")
+)
 ```
 
 ### Examine Estimated Betas from the Now-Casting
