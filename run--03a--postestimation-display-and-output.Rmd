@@ -30,7 +30,7 @@ load(file = glue("{output_path}cps_data_{my_output_tag}.Rda"))
 # If a county has been provided, we assume that it is for a higher density area,
 # and that the use of the 'metropolitan areas' subset of CPS data is appropriate
 nowcast_selected_sens <-
-    nowcast_out[cps_geo_subsample == ifelse(exists("my_county"), "metros", "none")]
+  nowcast_out_trunc[cps_geo_subsample == ifelse(exists("my_county"), "metros", "none")]
 
 ```
 
@@ -42,9 +42,11 @@ nowcast_parallel_setup <-
   nowcast_selected_sens %>%
   # /!\ Need to produce/bring in standard errors for the SAE. Assigning these 0
   # as a placeholder.
-  mutate(base_share_se    = 0,
-         nowcast_share    = elig_share,
-         nowcast_share_se = elig_share_se)
+  mutate(
+    base_share_se    = 0,
+    nowcast_share    = elig_share,
+    nowcast_share_se = elig_share_se
+  )
 
 # For each output, select the sensitivity and (calculation of) related measure
 # /!\ These related `base_share` measures are, in many cases, not aligned with
@@ -54,77 +56,97 @@ nowcast_parallel_setup <-
 # step would be to produce different runs of the SAE, although this is currently
 # highly time-consuming.
 
-nowcast_parallel_incpov_le50 <- 
-  nowcast_parallel_setup %>% 
-  filter(outcome_var == "incpov_le50_post_adj",
-         str_detect(sae_spec, "incpov_ctrls_mix")) %>% 
-  mutate(base_share = share_0_50)
+# nowcast_parallel_incpov_019_le130 <-
+#   nowcast_parallel_setup %>%
+#   filter(
+#     outcome_var == "bIncpov_le130",
+#     str_detect(sae_spec, "019_inc$"),
+#     age == "Age0to19"
+#   ) %>%
+#   mutate(base_share = share_0_75 + share_75_130)
+# 
+# nowcast_parallel_incpov_019_le205 <-
+#   nowcast_parallel_setup %>%
+#   filter(
+#     outcome_var == "bIncpov_le205",
+#     str_detect(sae_spec, "019_inc$"),
+#     age == "Age0to19"
+#   ) %>%
+#   mutate(base_share = share_0_75 + share_75_130 + share_130_200)
 
-nowcast_parallel_incpov_le100 <- 
+nowcast_parallel_incpov_2064_le130 <- 
   nowcast_parallel_setup %>% 
-  filter(outcome_var == "incpov_le100_post_adj",
-         str_detect(sae_spec, "incpov_ctrls_100")) %>% 
-  mutate(base_share = share_0_100)
+  filter(
+    outcome_var == "bIncpov_le130",
+    str_detect(sae_spec, "inc$"),
+    age == "Age20to64"
+  ) %>% 
+  mutate(
+    base_share = share_0_75 + share_75_130
+  )
 
-nowcast_parallel_incpov_le130 <- 
+nowcast_parallel_incpov_2064_le138 <- 
   nowcast_parallel_setup %>% 
-  filter(outcome_var == "incpov_le130_post_adj",
-         str_detect(sae_spec, "incpov_ctrls_100")) %>% 
-  mutate(base_share = NA)
-
-nowcast_parallel_incpov_le185 <- 
-  nowcast_parallel_setup %>% 
-  filter(outcome_var == "incpov_le185_post_adj",
-         str_detect(sae_spec, "incpov_ctrls_100")) %>% 
-  mutate(base_share = NA)
-
-nowcast_parallel_incpov_le200 <- 
-  nowcast_parallel_setup %>% 
-  filter(outcome_var == "incpov_le200_post_adj",
-         str_detect(sae_spec, "incpov_ctrls_100")) %>% 
-  mutate(base_share = share_0_100 + share_100_200)
-
-nowcast_parallel_incpov_le225 <- 
-  nowcast_parallel_setup %>% 
-  filter(outcome_var == "incpov_le225_post_adj",
-         str_detect(sae_spec, "incpov_ctrls_100")) %>% 
-  mutate(base_share = NA)
-
-nowcast_parallel_incpov_le400 <- 
-  nowcast_parallel_setup %>% 
-  filter(outcome_var == "incpov_le400_post_adj",
-         str_detect(sae_spec, "incpov_ctrls_100")) %>% 
-  mutate(base_share = share_0_100 + share_100_200 + share_200_300 + share_300_400)
+  filter(
+    outcome_var == "bIncpov_le138",
+    str_detect(sae_spec, "inc$"),
+    age == "Age20to64"
+  ) %>% 
+  mutate(
+    # This is approximate
+    base_share = share_0_75 + share_75_130
+  )
 
 bind_list <- 
-  list(nowcast_parallel_incpov_le50,
-       nowcast_parallel_incpov_le100,
-       nowcast_parallel_incpov_le130,
-       nowcast_parallel_incpov_le185,
-       nowcast_parallel_incpov_le200,
-       nowcast_parallel_incpov_le225,
-       nowcast_parallel_incpov_le400)
+  list(
+    # nowcast_parallel_incpov_019_le130,
+    # nowcast_parallel_incpov_019_le205,
+    nowcast_parallel_incpov_2064_le130,
+    nowcast_parallel_incpov_2064_le138
+  )
 
 ```
 
-```{r add all relevant ccdf sensitivities}
+```{r add all relevant prog sensitivities}
 
-for (ccdf_spec in unique(str_subset(nowcast_parallel_setup$outcome_var, "ccdf_elig_incratio"))) {
+incwork_specs <- nowcast_parallel_setup$outcome_var %>% str_subset("bProg_") %>% unique()
+
+for (incwork_spec in incwork_specs) {
   
   sensitivity_to_add <- 
     nowcast_parallel_setup %>% 
-    filter(outcome_var == ccdf_spec,
-           str_detect(sae_spec, "ccdf_wk_pov"))
-  
-  if (str_detect(ccdf_spec, as.character(local_ccdf_incratio_base))) {
-    # get the name of the "share_WorkElig_100_(ccdf thresh in FPL units)
-    hs_ccdf_field <- str_subset(colnames(nowcast_parallel_setup), "share_WorkElig_100_")
-    sensitivity_to_add <- mutate(sensitivity_to_add, base_share = share_WorkElig_0_100 + get(hs_ccdf_field))
+    filter(
+      outcome_var == incwork_spec,
+      str_detect(sae_spec, "incwork")
+    )
+ 
+  # /*\ This may need to be updated, depending on how categories are set in the
+  # SAE data
+  if (str_detect(incwork_spec, as.character(local_prog_incratio_base))) {
+    # get the name of the "share_WorkElig_100_(prog thresh in FPL units)
+    hs_prog_field <- 
+      sub_cn(
+        nowcast_parallel_setup, 
+        "share_WorkElig_100_"
+      )
+    sensitivity_to_add <- 
+      sensitivity_to_add %>% 
+      mutate(
+        base_share = share_WorkElig_0_100 + get(hs_prog_field)
+      )
   } else {
-    sensitivity_to_add <- mutate(sensitivity_to_add, base_share = NA)
+    sensitivity_to_add <- 
+      sensitivity_to_add
+      mutate(
+        base_share = NA
+      )
   }
   
-  bind_list <- append(bind_list, list(sensitivity_to_add))
+  bind_list <- 
+    append(
+      bind_list, 
+      list(sensitivity_to_add)
+    )
 }
 
 ```
@@ -136,7 +158,11 @@ for (ccdf_spec in unique(str_subset(nowcast_parallel_setup$outcome_var, "ccdf_el
 # Generate parallel base/nowcast constructions wide by base/now measures 
 nowcast_parallel_preshape <- 
   bind_rows(bind_list) %>% 
-  dplyr::select(GEOID, cps_base_recency, outcome_var, age, base_share, base_share_se, nowcast_share, nowcast_share_se) %>% 
+  select(
+    GEOID, cps_base_recency, outcome_var, age, 
+    base_share, base_share_se, 
+    nowcast_share, nowcast_share_se
+  ) %>% 
   # /!\ ** This unique() should not be necessary. However, it's occurring because
   # there are duplicates resulting from a merge of the crosswalk file, due to
   # overlaps with ZCTAs. There should be a cleaner, unique crosswalk of census
@@ -146,91 +172,118 @@ nowcast_parallel_preshape <-
 # Reshape to long format, with only different stats wide
 nowcast_parallel <- 
   nowcast_parallel_preshape %>% 
-  pivot_longer(cols = matches("share")) %>% 
-  separate(col = name, 
-           into = c("pd", "stat"),
-           sep = "_",
-           extra = "merge") %>% 
-  pivot_wider(names_from = stat,
-              values_from = value)
+  pivot_longer(
+    cols = matches("share")
+  ) %>% 
+  separate(
+    col = name, 
+    into = c("pd", "stat"),
+    sep = "_",
+    extra = "merge"
+  ) %>% 
+  pivot_wider(
+    names_from = stat,
+    values_from = value
+  )
 ```
 
 ```{r merge population stats to calculate counts}
 # Identify the year of the latest CPS data
 latest_cps_year <- max(cps_post$YEAR)
 
+# /!\ The new strategy for calibrating overall populations currently only produces
+# `base_year` population estimates. Some further adaptation needs to be made to
+# adapt this strategy to a second year, in order to produce estimates that would
+# variously apply to the base or nowcast years.
+# Despite this limitation, we note that this method (for the single year) very
+# likely produces estimates that are overall more principled than the prior method
+
 pop_by_age_long <- 
-  pop_by_age %>% 
-  pivot_longer(
-    cols = matches("age_.+_count")) %>% 
-  mutate(
-    age = str_replace(name, "_count", ""),
-    pd = case_when(year == latest_cps_year - 1 ~ "base",
-                   year == latest_cps_year     ~ "nowcast")) %>% 
+  pop_age_t_calib %>% 
   rename(
-    pop_count = value,
-    GEOID = GEOID_TR20) %>%
-  # /!\ Here again is where we need to bring in a proper standard error for
-  # population count estimates
-  mutate(pop_count_se = 0) %>% 
-  dplyr::select(-name)
+    pop_count = calib,
+    age = age_var
+  ) %>% 
+  mutate(
+    age = str_replace(age, "^n", ""),
+    # pd = case_when(year == latest_cps_year - 1 ~ "base",
+    #                year == latest_cps_year     ~ "nowcast")) %>% 
+    # /!\ Here again is where we need to bring in a proper standard error for
+    # population count estimates
+    pop_count_se = 0
+  )
+
+# /!\ As in the note above in this chunk we also lack the ability to create this
+# the school-year aligned blend of multiple years, when only a single (calendar)
+# year has been estimates.
+# Thus: throw an error if `sy` recency is requested
+stopifnot(!any("sy" %in% nowcast_parallel$cps_base_recency))
 
 # Create a school-year aligned blend of population
-pop_by_age_long_sy <- 
-  pop_by_age_long %>% 
-  arrange(GEOID, age, year) %>% 
-  mutate(
-    .by = c(GEOID, age),
-    pop_count_lag1    = shift(pop_count,    type = "lag"),
-    pop_count_se_lag1 = shift(pop_count_se, type = "lag")) %>% 
-  # To calculate a school-year aligned population count, we recognize that the 
-  # age data are reported by calendar year, that we assume that birthdays are
-  # uniformly distributed across the calendar year, and that 6 year olds in the
-  # 2024-25 school year--for example--are 2/3 those who turn 6 in 2024 (i.e. the
-  # 8 months before September 1 2024, and 1/3 of those who turned 6 in the 4
-  # months after September 1, 2023. We carry this calculation to all years and
-  # ages.
-  mutate(
-    pop_count_sy    = (2/3)*pop_count    + (1/3)*pop_count_lag1,
-    pop_count_se_sy = (2/3)*pop_count_se + (1/3)*pop_count_se_lag1) 
+# pop_by_age_long_sy <- 
+#   pop_by_age_long %>% 
+#   arrange(GEOID, age, year) %>% 
+#   mutate(
+#     .by = c(GEOID, age),
+#     pop_count_lag1    = shift(pop_count,    type = "lag"),
+#     pop_count_se_lag1 = shift(pop_count_se, type = "lag")) %>% 
+#   # To calculate a school-year aligned population count, we recognize that the 
+#   # age data are reported by calendar year, that we assume that birthdays are
+#   # uniformly distributed across the calendar year, and that 6 year olds in the
+#   # 2024-25 school year--for example--are 2/3 those who turn 6 in 2024 (i.e. the
+#   # 8 months before September 1 2024, and 1/3 of those who turned 6 in the 4
+#   # months after September 1, 2023. We carry this calculation to all years and
+#   # ages.
+#   mutate(
+#     pop_count_sy    = (2/3)*pop_count    + (1/3)*pop_count_lag1,
+#     pop_count_se_sy = (2/3)*pop_count_se + (1/3)*pop_count_se_lag1) 
 
 pop_by_age_long_recency <- 
   bind_rows(
-    pop_by_age_long %>% 
-      mutate(cps_base_recency = "allbase"),
-    pop_by_age_long %>% 
-      mutate(cps_base_recency = "most_recent"),
-    pop_by_age_long_sy %>% 
-      select(GEOID, year, age, pd, pop_count = pop_count_sy, pop_count_se = pop_count_se_sy) %>% 
-      mutate(cps_base_recency = "sy"))
+    pop_by_age_long %>% mutate(cps_base_recency = "allbase"),
+    pop_by_age_long %>% mutate(cps_base_recency = "most_recent")
+    # pop_by_age_long_sy %>% 
+    #   select(GEOID, year, age, pd, pop_count = pop_count_sy, pop_count_se = pop_count_se_sy) %>% 
+    #   mutate(cps_base_recency = "sy")
+  )
 
 nowcast_parallel_counts <- 
   nowcast_parallel %>% 
+  
   merge(
     pop_by_age_long_recency,
-    by = c("GEOID", "age", "pd", "cps_base_recency"),
+    by = c("GEOID", "age", "cps_base_recency"), # "pd"
     all.x = TRUE) %>% 
   data.table() %>%
   mutate(
     count    = share*pop_count,
-    count_se = se_product(share, pop_count, share_se, pop_count_se))
+    count_se = se_product(share, pop_count, share_se, pop_count_se)
+  )
 ```
 
 ```{r save results}
-save(nowcast_parallel_counts,
-     most_recent_months, most_recent_sy_months, 
-     pop_by_age_long_recency,
-     file = glue("{output_path}Now-cast counts at the tract level, pre-disaggregation - {my_output_tag}.Rda"))
+save(
+  nowcast_parallel_counts,
+  most_recent_months, most_recent_sy_months, 
+  pop_by_age_long_recency,
+  file = glue("{output_path}Now-cast counts at the tract level, pre-disaggregation - {my_output_tag}.Rda")
+)
 ```
 
 ```{r reshape measures long}
 share_pre_post <- 
   nowcast_parallel_counts %>% 
-  dplyr::select(-year) %>% 
-  pivot_longer(cols = matches("share|count")) %>% 
-  unite(wide_name, name, pd, sep = "_") %>% 
-  pivot_wider(names_from = wide_name,
-              values_from = value)
+  select(-year) %>% 
+  pivot_longer(
+    cols = matches("share|count")
+  ) %>% 
+  unite(
+    wide_name, name, pd, sep = "_"
+  ) %>% 
+  pivot_wider(
+    names_from = wide_name,
+    values_from = value
+  )
 ```
 
 ### Map Now-cast Estimates
