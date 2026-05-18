@@ -1,7 +1,16 @@
 
 ```{r calculate ratios and variance by baseline conditions}
-calc_cps_transitions <- function(base_data, stratum_vars = NULL, vulnerability_vars, outcome_vars, use_boot = FALSE, n_boot = 100) {
-  # Sum the person-weight by child within each household by child stratum,
+calc_cps_transitions <- 
+  function(
+    base_data, 
+    stratum_vars = NULL, 
+    vulnerability_vars, 
+    outcome_vars, 
+    use_boot = FALSE, 
+    n_boot = 100
+  ) {
+  
+    # Sum the person-weight by child within each household by child stratum,
   # and carry household vulnerability status
   # /!\ We should obtain weights that are as of baseline rather than final
   cps_base_calc <- 
@@ -24,7 +33,7 @@ calc_cps_transitions <- function(base_data, stratum_vars = NULL, vulnerability_v
   
   cps_transition_ratio_long <- 
     cps_transition_ratio %>% 
-    select(-one_of(outcome_vars)) %>% 
+    select(-all_of(outcome_vars)) %>% 
     melt(id.vars = c("CPSID", "WTFINL", "is_validation", "hh_base_weight", stratum_vars, vulnerability_vars),
          variable.name = "outcome_var")
   
@@ -103,15 +112,17 @@ calc_cps_transitions <- function(base_data, stratum_vars = NULL, vulnerability_v
 
 ```{r function to estimate and apply transition likelihood}
 
-est_apply_trans <- function(cps_trans_data, # This is the CPS pre/post data
-                            outcome_var,    # character value with name of outcome variable
-                            pred_vars,      # variables used for predicting the outcome
-                            vars_for_uncond = 1, # a subset of variable to use in an "unconditional" regression for comparison
-                                                 # the default is just an intercept
-                            sae_acs5_vals,  # SAE+ACS5-year data with the same pred_vars, used to generate local share predictions
-                            count_var,      # character name of field in sae_acs5_vals with count value for converting share into counts
-                            count_se_var    # character name of field in sae_acs5_vals with std error of count
-                            ) {
+est_apply_trans <- 
+  function(
+    cps_trans_data, # This is the CPS pre/post data
+    outcome_var,    # character value with name of outcome variable
+    pred_vars,      # variables used for predicting the outcome
+    vars_for_uncond = 1, # a subset of variable to use in an "unconditional" regression for comparison
+    # the default is just an intercept
+    sae_acs5_vals,  # SAE+ACS5-year data with the same pred_vars, used to generate local share predictions
+    count_var,      # character name of field in sae_acs5_vals with count value for converting share into counts
+    count_se_var    # character name of field in sae_acs5_vals with std error of count
+  ) {
   
   # Run conditional and unconditional regression
   # We are choosing to omit intercepts, because we're including 
@@ -123,6 +134,7 @@ est_apply_trans <- function(cps_trans_data, # This is the CPS pre/post data
   # 
   # /!\ Should use sample weights and robust standard errors
   
+  # browser()
   reg_out_uncond <-
     lm(glue("{outcome_var} ~ -1 + {paste(vars_for_uncond, collapse = ' + ')}"),
        data = cps_trans_data)
@@ -133,18 +145,26 @@ est_apply_trans <- function(cps_trans_data, # This is the CPS pre/post data
   
   # Save a data.frame with estimates
   betas <- 
-    bind_rows(tidy(reg_out) %>% 
-                mutate(outcome = outcome_var,
-                       trans_spec = "cond"),
-              tidy(reg_out_uncond) %>% 
-                mutate(outcome = outcome_var,
-                       trans_spec = "uncond"))
+    bind_rows(
+      tidy(reg_out) %>% 
+        mutate(
+          outcome = outcome_var,
+          trans_spec = "cond"
+        ),
+      tidy(reg_out_uncond) %>% 
+        mutate(
+          outcome = outcome_var,
+          trans_spec = "uncond"
+        )
+    )
   
   # Run prediction of shares of outcome
   pred <- 
-    predict(object  = reg_out, 
-            newdata = sae_acs5_vals,
-            se.fit  = TRUE)
+    predict(
+      object  = reg_out, 
+      newdata = sae_acs5_vals,
+      se.fit  = TRUE
+    )
   
   # Convert shares to count estimates
   count_estimates <- 

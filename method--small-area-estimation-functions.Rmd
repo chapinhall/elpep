@@ -214,43 +214,51 @@ run_sae <- function(direct_ests,                 # Direct, tract-level estimates
   
   fh_collected_tract <- 
     with(fh_tract, {
-      data.frame(GEOID                  = ind$Domain,
-                 share_direct           = ind$Direct,
-                 share_direct_mse_unadj = MSE$Direct,
-                 share_model            = model$fitted,
-                 share_model_mse_unadj  = model$variance,
-                 share_fh               = ind$FH,
-                 share_fh_mse_unadj     = MSE$FH)
+      data.frame(
+        GEOID                  = ind$Domain,
+        share_direct           = ind$Direct,
+        share_direct_mse_unadj = MSE$Direct,
+        share_model            = model$fitted,
+        share_model_mse_unadj  = model$variance,
+        share_fh               = ind$FH,
+        share_fh_mse_unadj     = MSE$FH
+      )
     }) %>% 
     # Check understanding of weights construction in fh() -- this checks out
-    mutate(implied_wgt = (share_fh - share_model)/(share_direct - share_model),
-           var_ratio_mod = share_direct_mse_unadj / (share_direct_mse_unadj + share_model_mse_unadj),
-           var_ratio_dir = share_model_mse_unadj  / (share_direct_mse_unadj + share_model_mse_unadj),
-           my_share_fh_mse_unadj1 = var_ratio_dir^2*share_direct_mse_unadj + (1-var_ratio_dir)^2*share_model_mse_unadj,
-           my_share_fh_mse_unadj2 =   implied_wgt^2*share_direct_mse_unadj +   (1-implied_wgt)^2*share_model_mse_unadj,
-           diff = share_fh_mse_unadj - my_share_fh_mse_unadj2) %>% 
+    mutate(
+      implied_wgt = (share_fh - share_model)/(share_direct - share_model),
+      var_ratio_mod = share_direct_mse_unadj / (share_direct_mse_unadj + share_model_mse_unadj),
+      var_ratio_dir = share_model_mse_unadj  / (share_direct_mse_unadj + share_model_mse_unadj),
+      my_share_fh_mse_unadj1 = var_ratio_dir^2*share_direct_mse_unadj + (1-var_ratio_dir)^2*share_model_mse_unadj,
+      my_share_fh_mse_unadj2 =   implied_wgt^2*share_direct_mse_unadj +   (1-implied_wgt)^2*share_model_mse_unadj,
+      diff = share_fh_mse_unadj - my_share_fh_mse_unadj2
+    ) %>% 
     data.table()
   
   if (FALSE) {
     fh_collected_puma <- 
     with(fh_puma, {
-      data.frame(PUMA                   = ind$Domain,
-                 share_direct           = ind$Direct,
-                 share_direct_mse_unadj = MSE$Direct,
-                 share_model            = model$fitted,
-                 share_model_mse_unadj  = model$variance,
-                 share_fh               = ind$FH,
-                 share_fh_mse_unadj     = MSE$FH)
+      data.frame(
+        PUMA                   = ind$Domain,
+        share_direct           = ind$Direct,
+        share_direct_mse_unadj = MSE$Direct,
+        share_model            = model$fitted,
+        share_model_mse_unadj  = model$variance,
+        share_fh               = ind$FH,
+        share_fh_mse_unadj     = MSE$FH
+      )
     }) %>% 
     # Check understanding of weights construction in fh() -- this checks out, as
     # a linear combination of standard errors (not variances)
-    mutate(implied_wgt = (share_fh - share_model)/(share_direct - share_model),
-           var_ratio_mod = share_direct_mse_puma / (share_direct_mse_puma + share_model_mse_puma),
-           var_ratio_dir = share_model_mse_puma  / (share_direct_mse_puma + share_model_mse_puma),
-           my_share_fh_mse_puma1 = var_ratio_dir^2*share_direct_mse_puma + (1-var_ratio_dir)^2*share_model_mse_puma,
-           my_share_fh_mse_puma5 =   implied_wgt^2*share_direct_mse_puma +   (1-implied_wgt)^2*share_model_mse_puma,
-           diff = share_fh_mse_puma - my_share_fh_mse_puma5) %>% 
-    data.table()
+    mutate(
+      implied_wgt = (share_fh - share_model)/(share_direct - share_model),
+      var_ratio_mod = share_direct_mse_puma / (share_direct_mse_puma + share_model_mse_puma),
+      var_ratio_dir = share_model_mse_puma  / (share_direct_mse_puma + share_model_mse_puma),
+      my_share_fh_mse_puma1 = var_ratio_dir^2*share_direct_mse_puma + (1-var_ratio_dir)^2*share_model_mse_puma,
+      my_share_fh_mse_puma5 =   implied_wgt^2*share_direct_mse_puma +   (1-implied_wgt)^2*share_model_mse_puma,
+      diff = share_fh_mse_puma - my_share_fh_mse_puma5
+    ) %>% 
+      data.table()
   }
   
   # /!\ Attempt alternative model estimation ----------------------------------#
