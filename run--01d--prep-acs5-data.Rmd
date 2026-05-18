@@ -319,6 +319,15 @@ acs5_incpov_byage <-
     numerator = "inc_to_pov_ratio_agg",
     by_vars = "age_agg"
   )
+
+# Also produce granular estimates in long form for use in distributing SAE estimates
+acs5_incpov_byage_granular <- 
+  acs5_incpov_byage_prep %>% 
+  construct_fields(
+    numerator = "inc_to_pov_ratio",
+    by_vars = "age_agg", 
+    wide = FALSE
+  )
 ```
 
 
@@ -333,20 +342,13 @@ inspect_fields(
   show_all_combos = TRUE
 )
 
-acs5_incpov_byage <- 
+acs5_incpov_fam <- 
   acs5_incpov_fam_pull %>% 
   filter(
     !str_detect(inc_to_pov_ratio, "All")
   ) %>% 
   construct_fields(
     numerator = "inc_to_pov_ratio"
-  )
-
-# Create an alternate partition
-acs5_incpov_byage <- 
-  acs5_incpov_fam_pull %>% 
-  filter(
-    str_detect(inc_to_pov_ratio, "All")
   )
 
 ```
@@ -581,6 +583,8 @@ acs5_workelig_withKids_num <-
       (str_detect(family_type, "Unmarried") & status == "Empl")
   )
 
+inspect_fields(acs5_workelig_withKids_num)
+
 acs5_workelig_all_num <- 
   acs5_famconfig_wKids_raw %>% 
   filter(
@@ -588,6 +592,8 @@ acs5_workelig_all_num <-
     (family_type == "Married" & status == "HusbandEmplWifeEmpl") | 
       (str_detect(family_type, "Unmarried") & status == "Empl")
   )
+
+inspect_fields(acs5_workelig_all_num)
 
 # Ensure we have isolated the desired conditions
 if (FALSE) {
@@ -599,8 +605,8 @@ if (FALSE) {
 ```{r construct desired work eligibility field}
 acs5_workelig <- 
   merge(
-    acs5_workelig_withKids_num   %>% summarize(nEmpl_allHhs   = sum(estimate), .by = GEOID),
-    acs5_workelig_withKids_denom %>% summarize(nAll_allHhs    = sum(estimate), .by = GEOID), by = "GEOID") %>% 
+    acs5_workelig_all_num        %>% summarize(nEmpl_allHhs   = sum(estimate), .by = GEOID),
+    acs5_workelig_all_denom      %>% summarize(nAll_allHhs    = sum(estimate), .by = GEOID), by = "GEOID") %>% 
   merge(
     acs5_workelig_withKids_num   %>% summarize(nEmpl_withKids = sum(estimate), .by = GEOID), by = "GEOID") %>% 
   merge(
@@ -614,6 +620,27 @@ acs5_workelig <-
     nAllAdultsEmpl_withKids = nAll_withKids
   )
 
+acs5_workelig_long <- 
+  acs5_workelig %>% 
+  select(matches("GEOID|rAllAdults")) %>% 
+  pivot_longer(
+    cols = -GEOID,
+    names_to = "status",
+    values_to = "r"
+  ) %>% 
+  mutate(
+    status = str_replace(status, "^\\w", "")
+  ) %>% 
+  {
+    bind_rows(
+      .,
+      mutate(
+        .,
+        status = str_replace(status, "AllAdultsEmpl", "NotAllAdultsEmpl"),
+        r = 1 - r
+      )
+    )
+  }
 ```
 
 
@@ -700,9 +727,19 @@ merge_reduce <- function(x, y) merge(x, y, by = "GEOID")
 acs5tract <- Reduce(merge_reduce, acs5_tomerge)
 ```
 
+```{r merge in each tracts county}
+acs5tract <- 
+  acs5tract %>% 
+  merge(
+    geo_crosswalk %>% select(GEOID, COUNTYFIP) %>% unique(),
+    all.x = TRUE
+  )
+```
+
+
 ```{r}
 save(
-  acs5tract,
+  acs5tract, acs5_incpov_byage_granular, acs5_workelig_long,
   file = glue("{output_path}acs5_data_{my_output_tag}.Rda")
 )
 ```
@@ -776,8 +813,8 @@ make_acs5_map <- function(my_dat, my_field, my_label, use_aux = TRUE) {
 make_acs5_map(acs5tract,      "rIncPov0to75_Age18to64",   "% < 75% FPL")
 make_acs5_map(acs5tract,      "rIncPov400plus_Age18to64", "% over 400% FPL")
 
-make_acs5_map(acs5tract,      "rEdLtHs", "% Less than HS Degree")
-make_acs5_map(acs5tract,      "rEdColl", "% College Educated")
+make_acs5_map(acs5tract,      "rEduc_LtHs", "% Less than HS Degree")
+make_acs5_map(acs5tract,      "rEduc_Coll", "% College Educated")
 
 # make_acs5_map(acs5tract,      "raceeth_wh_nonh_est",    "% White (non-Hispanic)")
 # make_acs5_map(acs5tract,      "raceeth_bl_nonh_est",    "% Black (non-Hispanic)")
