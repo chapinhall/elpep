@@ -18,7 +18,7 @@ load(glue("{output_path}Now-cast counts at the tract level, pre-disaggregation -
 
 ```
 
-#### Generate Excel Tables with Estimates at Each Geographic Aggregation for CCDF
+#### Generate Excel Tables with Estimates at Each Geographic Aggregation
 
 ```{r develop time period indication for output }
 # Automate the calculation of the time period
@@ -52,7 +52,7 @@ if (FALSE) {
 ```
 
 ```{r identify label for income measure used for thresholds}
-ccdf_income_thresh_label <- 
+prog_income_thresh_label <- 
     ifelse(exists("local_custom_thresh_label"),
            local_custom_thresh_label,
            "FPL")
@@ -88,35 +88,47 @@ write_agg_output <-
   for (lvl in agg_levels) {
     add_sheet <-
       copy(lvl[["agg_table"]]) %>% 
-      arrange(get(lvl[["agg_field"]])) %>% 
-      setnames(lvl[["agg_field"]], lvl[["sheet_name"]]) %>% 
-      filter(pd == "nowcast",
-             cps_base_recency == recency,
-             str_detect(outcome_var, outcomes_regex),
-             get(lvl[["sheet_name"]]) != "") %>% 
-               # remove rows with blank values for the geography
+      arrange(
+        get(lvl[["agg_field"]])
+      ) %>% 
+      setnames(
+        lvl[["agg_field"]], 
+        lvl[["sheet_name"]]
+      ) %>% 
+      filter(
+        pd == "nowcast",
+        cps_base_recency == recency,
+        str_detect(outcome_var, outcomes_regex),
+        get(lvl[["sheet_name"]]) != "") %>% 
+          # remove rows with blank values for the geography
       select(-cps_base_recency) %>% 
-      merge(age_aggs %>% 
-              transmute(age = age_group_lab, 
-                        Age = glue("{age_group_lab} ({low_month}-{high_month} months)")),
-            by = "age") %>% 
-      select(-age) %>% 
+      # merge(
+      #   age_aggs %>% 
+      #     transmute(
+      #       age = age_group_lab, 
+      #       Age = glue("{age_group_lab} ({low_month}-{high_month} months)")
+      #     ),
+      #   by = "age") %>% 
       mutate(
+        Age = str_replace(age, "Age(\\d+)to(\\d+)", "Age \\1-\\2"),
+        
         Outcome = 
-          case_when(str_detect(outcome_var, "^ccdf") ~ 
-                      str_replace(outcome_var, 
-                                  "ccdf_elig_incratio_(\\d+)",
-                                  glue("{local_ccdf_name_short} - \\1% {ccdf_income_thresh_label}")),
-                    # /!\ In cases of other thresholds being of interest, could
-                    # replace these "_le(\\d+)_" assignments with a more robust
-                    # one using regular expressions
-                    str_detect(outcome_var, "_le50_")  ~ "Below 50% FPL",
-                    str_detect(outcome_var, "_le100_") ~ "Below 100% FPL",
-                    str_detect(outcome_var, "_le130_") ~ "Below 130% FPL",
-                    str_detect(outcome_var, "_le185_") ~ "Below 185% FPL",
-                    str_detect(outcome_var, "_le200_") ~ "Below 200% FPL",
-                    str_detect(outcome_var, "_le225_") ~ "Below 225% FPL",
-                    str_detect(outcome_var, "_le400_") ~ "Below 400% FPL"),
+          case_when(
+            str_detect(outcome_var, "^bProg") ~ 
+              str_replace(
+                outcome_var, 
+                "bProg.+_(\\d+)",
+                glue("Program eligible: Working, Income <\\1% {prog_income_thresh_label}")),
+            
+            # /!\ In cases of other thresholds being of interest, could
+            # replace these "_le(\\d+)_" assignments with a more robust
+            # one using regular expressions
+            str_detect(outcome_var, "_le(\\d+)")  ~ 
+              str_replace(
+                outcome_var,
+                ".+_le(\\d+).*",
+                "Below \\1% FPL")
+          ),
         
         Outcome = sort_by_char_nums(Outcome),
         
@@ -133,77 +145,107 @@ write_agg_output <-
         share_se = se_proportion(count, pop_count, count_se, pop_count_se),
         share_lb = pmax(share + qnorm(.1)*share_se, 0) %>% replace_na(0),
         share_ub = pmin(share + qnorm(.9)*share_se, 1) %>% replace_na(0)) %>% 
-      dplyr::select(-count_se, -share_se, -pop_count_se) %>% 
-      pivot_longer(cols = matches("(count|share)(_|$)")) %>% 
-      mutate(stat = case_when(name == "pop_count" ~ "Overall #",
-                              name %like% "count" ~ "#",
-                              name %like% "share" ~ "%"),
-             calc = case_when(name %like% "_lb" ~ ", lower bound",
-                              name %like% "_ub" ~ ", upper bound",
-                              TRUE ~ ""),
-             Outcome = case_when(name == "pop_count" ~ "",
-                                 TRUE                ~ paste0(" ", Outcome)),
-             
-             label = glue("{Age}{Outcome}, {date_label} -- {stat}{calc}")) %>% 
+      
+      select(-age, -count_se, -share_se, -pop_count_se) %>% 
+      
+      pivot_longer(
+        cols = matches("(count|share)(_|$)")
+      ) %>% 
+      mutate(
+        stat = 
+          case_when(
+            name == "pop_count" ~ "Overall #",
+            name %like% "count" ~ "#",
+            name %like% "share" ~ "%"
+          ),
+        calc = 
+          case_when(
+            name %like% "_lb" ~ ", lower bound",
+            name %like% "_ub" ~ ", upper bound",
+            TRUE ~ ""
+          ),
+        Outcome = 
+          case_when(
+            name == "pop_count" ~ "",
+            TRUE                ~ paste0(" ", Outcome)
+          ),
+        
+        label = glue("{Age}{Outcome}, {date_label} -- {stat}{calc}")) %>% 
       arrange(Age, Outcome) %>% 
       dplyr::select(-pd, -outcome_var, -Age, -Outcome, -name, -stat, -calc) %>% 
       # Use a unique() to compress the overall population rows across outcomes
       unique() %>% 
-      pivot_wider(names_from = label,
-                  values_from = value)
+      pivot_wider(
+        names_from = label,
+        values_from = value
+      )
     
     openxlsx::addWorksheet(wb, 
                            sheetName = lvl[["sheet_name"]])
     
     # Write the data to the new sheet
-    openxlsx::writeDataTable(wb, 
-                   sheet = lvl[["sheet_name"]], 
-                   x = add_sheet,
-                   colNames = TRUE, 
-                   rowNames = FALSE,
-                   tableStyle = "TableStyleMedium2")
+    openxlsx::writeDataTable(
+      wb, 
+      sheet = lvl[["sheet_name"]], 
+      x = add_sheet,
+      colNames = TRUE, 
+      rowNames = FALSE,
+      tableStyle = "TableStyleMedium2"
+    )
     
     # Format specified columns as percentage
-    openxlsx::addStyle(wb, 
-             sheet = lvl[["sheet_name"]], 
-             style = openxlsx::createStyle(numFmt = "0.0%"), 
-             cols = str_which(cn(add_sheet), "-- %"),
-             rows = 1:nrow(add_sheet)+1,
-             gridExpand = TRUE)
+    openxlsx::addStyle(
+      wb, 
+      sheet = lvl[["sheet_name"]], 
+      style = openxlsx::createStyle(numFmt = "0.0%"), 
+      cols = str_which(cn(add_sheet), "-- %"),
+      rows = 1:nrow(add_sheet)+1,
+      gridExpand = TRUE
+    )
     
     # Format specified columns as comma
-    openxlsx::addStyle(wb, 
-             sheet = lvl[["sheet_name"]], 
-             style = openxlsx::createStyle(numFmt = "#,##0"), 
-             cols = str_which(cn(add_sheet), "#$"),
-             rows = 1:nrow(add_sheet)+1,
-             gridExpand = TRUE)
+    openxlsx::addStyle(
+      wb, 
+      sheet = lvl[["sheet_name"]], 
+      style = openxlsx::createStyle(numFmt = "#,##0"), 
+      cols = str_which(cn(add_sheet), "#$"),
+      rows = 1:nrow(add_sheet)+1,
+      gridExpand = TRUE
+    )
     
     # Wrap text for header row
-    openxlsx::addStyle(wb, 
-             sheet = lvl[["sheet_name"]], 
-             style = openxlsx::createStyle(wrapText = TRUE), 
-             cols = 1:ncol(add_sheet),
-             rows = 1,
-             gridExpand = TRUE)
+    openxlsx::addStyle(
+      wb, 
+      sheet = lvl[["sheet_name"]], 
+      style = openxlsx::createStyle(wrapText = TRUE), 
+      cols = 1:ncol(add_sheet),
+      rows = 1,
+      gridExpand = TRUE
+    )
     
     # Freeze the top row and leftmost column
-    openxlsx::freezePane(wb,
-               sheet = lvl[["sheet_name"]],
-               firstRow = TRUE,
-               firstCol = TRUE)
+    openxlsx::freezePane(
+      wb,
+      sheet = lvl[["sheet_name"]],
+      firstRow = TRUE,
+      firstCol = TRUE
+    )
     
     # Set column widths
-    openxlsx::setColWidths(wb, 
-                 sheet = lvl[["sheet_name"]], 
-                 cols = 2:ncol(add_sheet), 
-                 widths = 18)
+    openxlsx::setColWidths(
+      wb, 
+      sheet = lvl[["sheet_name"]], 
+      cols = 2:ncol(add_sheet), 
+      widths = 18
+    )
     
     # Group and hide columns corresponding to upper and lower bounds
-    openxlsx::groupColumns(wb,
-                 sheet = lvl[["sheet_name"]],
-                 cols = str_which(cn(add_sheet), "bound$"),
-                 hidden = TRUE)
+    openxlsx::groupColumns(
+      wb,
+      sheet = lvl[["sheet_name"]],
+      cols = str_which(cn(add_sheet), "bound$"),
+      hidden = TRUE
+    )
   }
   
   openxlsx::saveWorkbook(
@@ -224,56 +266,54 @@ output_fpl_cuts_regex <-
   str_trim() %>% 
   paste(collapse = "|")
 
-outcomes_out_regex <- glue("ccdf_elig_incratio_|incpov_le({output_fpl_cuts_regex})")
+outcomes_out_regex <- glue("bProg_elig_|bIncpov_le({output_fpl_cuts_regex})")
 
 lAgg_for_output <- 
-  list(list(agg_table = nowcast_agg_tract,
-            agg_field = "GEOID",
-            sheet_name = "Census Tract"),
-       list(agg_table = nowcast_agg_zip,
-            agg_field = "ZCTA",
-            sheet_name = "Zip Code"),
-       list(agg_table = nowcast_agg_cty,
-            agg_field = "County",
-            sheet_name = "County"),
-       list(agg_table = nowcast_agg_sd,
-            agg_field = "school",
-            sheet_name = "School Districts"),
-       list(agg_table = nowcast_agg_st,
-            agg_field = "State",
-            sheet_name = "State"))
+  list(
+    list(
+      agg_table = nowcast_agg_tract,
+      agg_field = "GEOID",
+      sheet_name = "Census Tract"
+    ),
+    list(
+      agg_table = nowcast_agg_zip,
+      agg_field = "ZCTA",
+      sheet_name = "Zip Code"
+    ),
+    list(
+      agg_table = nowcast_agg_cty,
+      agg_field = "County",
+      sheet_name = "County"
+    ),
+    list(
+      agg_table = nowcast_agg_sd,
+      agg_field = "school",
+      sheet_name = "School Districts"
+    ),
+    list(
+      agg_table = nowcast_agg_st,
+      agg_field = "State",
+      sheet_name = "State"
+    )
+  )
 
 if (exists("my_aux_geo")) {
   lAgg_for_output[[length(lAgg_for_output)+1]] <- 
-    list(agg_table = nowcast_agg_aux,
-         agg_field = "aux_geo_label",
-         sheet_name = my_aux_geo_desc)
-}
-
-if (str_detect(my_output_tag, "IECAM")) {
-  lAgg_for_output[[length(lAgg_for_output)+1]] <- 
-    list(agg_table = nowcast_agg_b5,
-         agg_field = "b5",
-         sheet_name = "Birth To Five")
-}
-if (str_detect(my_output_tag, "CECIDS")) {
-  lAgg_for_output[[length(lAgg_for_output)+1]] <- 
-    list(agg_table = nowcast_agg_distr,
-         agg_field = "distr",
-         sheet_name = "Local School District")
-  lAgg_for_output[[length(lAgg_for_output)+1]] <- 
-    list(agg_table = nowcast_agg_network,
-         agg_field = "network",
-         sheet_name = "CPS Elementary Network")
+    list(
+      agg_table = nowcast_agg_aux,
+      agg_field = "aux_geo_label",
+      sheet_name = my_aux_geo_desc
+    )
 }
 
 write_agg_output(
   outcomes_regex = outcomes_out_regex,
   #age_regex      = "age(_3$|_4$|_infant$|_toddler$)", # "_0to2|_3to5|_0to5|_6to12"
   agg_levels     = lAgg_for_output,
-  recency        = ifelse(str_detect(my_output_tag, "CECIDS"), "sy", "most_recent"),  
+  recency        = "most_recent", # /*\ Other options can be
     # "allbase" for calendar year of base_year + 1
-  out_label      = local_ccdf_name_short)
+  out_label      = "Medicaid and SNAP" # local_prog_name_short
+)
 
 ```
 
@@ -473,7 +513,7 @@ static_map_level_diff <- function(plot_stats = c("nowcast", "diff"),
 for (out_var in c("ccdf", "le100", "le200")) {
   
   if (out_var == "ccdf") {
-    out_var_desc <- glue("{local_ccdf_name_short} - {local_ccdf_incratio_base}% {ccdf_income_thresh_label} ({date_range})")
+    out_var_desc <- glue("{local_ccdf_name_short} - {local_ccdf_incratio_base}% {prog_income_thresh_label} ({date_range})")
     out_var_name <- glue("ccdf_elig_incratio_{local_ccdf_incratio_base}")
   } else if (out_var == "le100") {
     out_var_desc <- glue("Head Start Eligibility ({date_range})")
@@ -580,7 +620,7 @@ if (exists("map_geos")) {
                          outcome = o,
                          field_desc = 
                            glue("{local_ccdf_name_short} Eligibility - ",
-                                "{inc_thresh}% {ccdf_income_thresh_label}, {age_desc} ",
+                                "{inc_thresh}% {prog_income_thresh_label}, {age_desc} ",
                                 "({date_range})"),
                          val_limits = share_range,
                          show_legend = TRUE,
@@ -606,7 +646,7 @@ if (exists("map_geos")) {
                            outcome = o,
                            field_desc = 
                              glue("{local_ccdf_name_short} Eligibility - ",
-                                  "{inc_thresh}% {ccdf_income_thresh_label}, {age_desc} ",
+                                  "{inc_thresh}% {prog_income_thresh_label}, {age_desc} ",
                                   "({date_range})"),
                            val_limits = NULL,
                            show_legend = TRUE,
@@ -879,7 +919,7 @@ if (length(local_ccdf_incratio_cuts) > 1 && exists("map_geos")) {
     geom_bar(stat = "identity",
              width = 0.3) +
     scale_y_continuous(labels = percent) +
-    scale_fill_viridis_d(name = glue("Income Threshold\nas % of {ccdf_income_thresh_label}"),
+    scale_fill_viridis_d(name = glue("Income Threshold\nas % of {prog_income_thresh_label}"),
                          option = "G",
                          guide = guide_legend(reverse = TRUE,
                                               byrow = TRUE)) +
