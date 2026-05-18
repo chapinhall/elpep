@@ -231,16 +231,27 @@ for (x in 1:12) {
                 mutate(fpl_fam_size = 8 + x))
 }
 
+# The Consumer Price Index is pulled and merged in to add calculations of 
+# inflation *by month*. Thus, the `ytd_infl` is a factors that considers
+# inflation within the given year. This by-month inflation tracking is used
+# to ensure that current population survey data, which is surveyed by month,
+# can be properly compared in real terms.
+
 fredr_set_key(fred_key)
 cpi <- 
   fredr(
     series_id = "CPIAUCSL",
     observation_start = as.Date("1998-01-01"),
-    observation_end   = Sys.Date()) %>% 
-  mutate(fpl_year = year(date),
-         fpl_month = month(date)) %>% 
-  group_by(fpl_year) %>% 
-  mutate(ytd_infl = value / value[1])
+    observation_end   = Sys.Date()
+  ) %>% 
+  mutate(
+    fpl_year = year(date),
+    fpl_month = month(date)
+  ) %>% 
+  mutate(
+    .by = fpl_year,
+    ytd_infl = value / value[1]
+  )
 
 fpl_by_month <- 
   fpl_by_year_aug %>% 

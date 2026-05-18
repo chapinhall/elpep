@@ -198,7 +198,8 @@ cps_recoded <-
       ),
     bAge0to5   = 1*(cAge == "Age0to5"),
     bAge6to14  = 1*(cAge == "Age6to14"),
-    bAge15to19 = 1*(cAge == "Age15to19"),
+    bAge15to18 = 1*(cAge == "Age15to18"), # Ages through 18 are used in presence-of-dependent qualifications
+    bAge15to19 = 1*(cAge == "Age15to19"), # Ages through 19 are used to line up with eligibility categories
     bAge20to64 = 1*(cAge == "Age20to64"),
     bAge65plus = 1*(cAge == "Age65plus"),
     
@@ -320,6 +321,7 @@ cps_family <-
     bAge6to14_present  = maxNA(bChild_of_Hoh & bAge6to14),
     bAge15to19_present = maxNA(bChild_of_Hoh & bAge15to19),
     bAge0to14_present  = maxNA(bChild_of_Hoh & (bAge0to5 | bAge6to14)),
+    bAge0to18_present  = maxNA(bChild_of_Hoh & (bAge0to5 | bAge6to14 | bAge15to18)),
     
     bAdults_all_work_sch       = minNA(bWork_elig),
     bAdults_all_workThresh_sch = minNA(bWork_metHrsThresh_elig),

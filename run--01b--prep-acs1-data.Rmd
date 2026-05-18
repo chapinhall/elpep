@@ -282,7 +282,8 @@ acs1_adults <-
     bAge0to5_present   = maxNA(bAge0to5),
     bAge6to14_present  = maxNA(bAge6to14),
     bAge15to18_present = maxNA(bAge15to19),
-    bAge0to14_present  = maxNA(bAge0to5 | bAge6to14)
+    bAge0to14_present  = maxNA(bAge0to5 | bAge6to14),
+    bAge0to18_present  = maxNA(bAge0to5 | bAge6to14 | bAge15to18)
   ) %>% 
   
   # Subset only to householder and spouse (if present) data
