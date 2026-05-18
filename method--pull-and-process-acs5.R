@@ -439,25 +439,25 @@ develop_meta <- function(table_meta, verbose = FALSE) {
       mutate(
         ed_attain = 
           case_when(
-            str_detect(label, "No schooling")         ~ "EdLtHs", # "EdNoSch", 
-            str_detect(label, "Nursery to 4th")       ~ "EdLtHs", # "EdLt4th", 
-            str_detect(label, "5th and 6th")          ~ "EdLtHs", # "EdGr5or6", 
-            str_detect(label, "7th and 8th")          ~ "EdLtHs", # "EdGr7or8", 
-            str_detect(label, "9th grade")            ~ "EdLtHs", # "EdGr9", 
-            str_detect(label, "10th grade")           ~ "EdLtHs", # "EdGr10", 
-            str_detect(label, "11th grade")           ~ "EdLtHs", # "EdGr11", 
-            str_detect(label, "12th grade, no dipl")  ~ "EdLtHs", # "EdGr12NoDipl", 
-            str_detect(label, "High school graduate") ~ "EdHs", 
+            str_detect(label, "No schooling")         ~ "Educ_LtHs", # "EdNoSch", 
+            str_detect(label, "Nursery to 4th")       ~ "Educ_LtHs", # "EdLt4th", 
+            str_detect(label, "5th and 6th")          ~ "Educ_LtHs", # "EdGr5or6", 
+            str_detect(label, "7th and 8th")          ~ "Educ_LtHs", # "EdGr7or8", 
+            str_detect(label, "9th grade")            ~ "Educ_LtHs", # "EdGr9", 
+            str_detect(label, "10th grade")           ~ "Educ_LtHs", # "EdGr10", 
+            str_detect(label, "11th grade")           ~ "Educ_LtHs", # "EdGr11", 
+            str_detect(label, "12th grade, no dipl")  ~ "Educ_LtHs", # "EdGr12NoDipl", 
+            str_detect(label, "High school graduate") ~ "Educ_Hs", 
             str_detect(label, "Less than (high|9th)|Not high school graduate") ~
               "EdLtHs", 
-            str_detect(label, "Some college")         ~ "EdSomeColl", 
-            str_detect(label, "Associate's")          ~ "EdAssoc",
-            str_detect(label, "Bachelor's")           ~ "EdColl", 
-            str_detect(label, "Graduate")             ~ "EdGrad",
-            str_detect(label, "Master's")             ~ "EdGrad",
-            str_detect(label, "Professional")         ~ "EdGrad",
-            str_detect(label, "Doctorate")            ~ "EdGrad",
-            str_detect(label, "Less than 9th")        ~ "EdLtHs"
+            str_detect(label, "Some college")         ~ "Educ_SomeColl", 
+            str_detect(label, "Associate's")          ~ "Educ_Assoc",
+            str_detect(label, "Bachelor's")           ~ "Educ_Coll", 
+            str_detect(label, "Graduate")             ~ "Educ_Grad",
+            str_detect(label, "Master's")             ~ "Educ_Grad",
+            str_detect(label, "Professional")         ~ "Educ_Grad",
+            str_detect(label, "Doctorate")            ~ "Educ_Grad",
+            str_detect(label, "Less than 9th")        ~ "Educ_LtHs"
           ) %>% 
           replace_na("All"))
   }

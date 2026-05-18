@@ -570,11 +570,11 @@ cps_base_hoh <-
     RELATE == 101
   ) %>% 
   mutate(
-    rEd_LtHs     = bEduc_LtHs,
-    rEd_Hs       = bEduc_HS,
-    rEd_SomeColl = bEduc_SomeColl,
-    rEd_Coll     = bEduc_Coll,
-    rEd_Grad     = bEduc_Grad,
+    rEduc_LtHs     = bEduc_LtHs,
+    rEduc_Hs       = bEduc_HS,
+    rEduc_SomeColl = bEduc_SomeColl,
+    rEduc_Coll     = bEduc_Coll,
+    rEduc_Grad     = bEduc_Grad,
     
     rMarried = bSpousePresent,
     rUnmarriedMaleHh   = 1*(!bSpousePresent & bGender_M == 1),
