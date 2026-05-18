@@ -15,317 +15,6 @@ load(file = glue("{output_path}Now-cast counts at the tract level, pre-disaggreg
 ```
 
 
-### Disaggregate Estimates by Age Group
-
-Our strategy to disaggregate estimates by age group--primarily to break our estimates for ages 0-5 into 0-2 and 3-5--is to take the empirical age breakdown specific to each outcome, from the ACS 1-year data. 
-
-```{r calculate outcome-specific age breakdowns}
-calc_breakdown <- function(acs1_outcome_sub, outcome_var) {
-  acs1_age_breakdown <-
-    acs1_outcome_sub %>% 
-    filter(child_agegroup %in% c("0to2", "3to5")) %>% 
-    mutate(age_0to2 = between(AGEP, 0, 2),
-           age_3to5 = between(AGEP, 3, 5),
-           age_0    = AGEP == 0,
-           age_1    = AGEP == 1,
-           age_2    = AGEP == 2,
-           age_3    = AGEP == 3,
-           age_4    = AGEP == 4,
-           age_5    = AGEP == 5) %>% 
-    summarize(age_0to2 = sum(PWGTP[age_0to2]) / sum(PWGTP),
-              age_3to5 = sum(PWGTP[age_3to5]) / sum(PWGTP),
-              age_0    = sum(PWGTP[age_0])    / sum(PWGTP),
-              age_1    = sum(PWGTP[age_1])    / sum(PWGTP),
-              age_2    = sum(PWGTP[age_2])    / sum(PWGTP),
-              age_3    = sum(PWGTP[age_3])    / sum(PWGTP),
-              age_4    = sum(PWGTP[age_4])    / sum(PWGTP),
-              age_5    = sum(PWGTP[age_5])    / sum(PWGTP)) %>% 
-    mutate(outcome_var = outcome_var)
-      
-  if (FALSE) {
-    acs1_outcome_sub %>% 
-      filter(child_agegroup %in% c("0to2", "3to5")) %>% 
-      mutate(age_0to2 = between(AGEP, 0, 2),
-             age_3to5 = between(AGEP, 3, 5),
-             age_0    = AGEP == 0,
-             age_1    = AGEP == 1,
-             age_2    = AGEP == 2,
-             age_3    = AGEP == 3,
-             age_4    = AGEP == 4,
-             age_5    = AGEP == 5) %>% 
-      select(AGEP, child_agegroup, age_0to2, age_3to5, age_4, age_5) %>% 
-      unique() %>% 
-      arrange(AGEP)
-  }
-  
-  return(acs1_age_breakdown)
-}
-
-age_breakdown_byoutcome <-
- bind_rows(
-   calc_breakdown(acs1_child %>% filter(fam_incpov_ratio <= 0.50), "incpov_le50_post_adj"),
-   calc_breakdown(acs1_child %>% filter(fam_incpov_ratio <= 1.00), "incpov_le100_post_adj"),
-   calc_breakdown(acs1_child %>% filter(fam_incpov_ratio <= 1.85), "incpov_le185_post_adj"),
-   calc_breakdown(acs1_child %>% filter(fam_incpov_ratio <= 2.00), "incpov_le200_post_adj"),
-   calc_breakdown(acs1_child %>% filter(fam_incpov_ratio <= 2.25), "incpov_le225_post_adj"),
-   calc_breakdown(acs1_child %>% filter(fam_incpov_ratio <= 4.00), "incpov_le400_post_adj"))
-```
-
-
-```{r add breakdowns for all relevant ccdf sensitivities}
-
-for (ccdf_spec in unique(str_subset(nowcast_parallel_counts$outcome_var, "ccdf_elig_incratio"))) {
-  
-  age_breakdown_byoutcome <- 
-    bind_rows(age_breakdown_byoutcome,
-              calc_breakdown(acs1_child %>% filter(get(ccdf_spec) == TRUE),
-                             ccdf_spec))
-  
-} 
-```
-
-```{r examine the age dispersion across outcomes, eval = developer_mode}
-
-age_breakdown_byoutcome_long <- 
-  age_breakdown_byoutcome %>% 
-  pivot_longer(cols = -outcome_var,
-               names_to = "child_agegroup",
-               values_to = "pct_age_of_0to5") %>%
-  mutate(outcome_var = sort_by_char_nums(outcome_var))
-
-plot_age_in_outcome <- function(outcome_regex, subtitle) {
-  ggplot(age_breakdown_byoutcome_long %>% filter(str_detect(outcome_var, outcome_regex)),
-       aes(x = child_agegroup,
-           y = pct_age_of_0to5,
-           fill = outcome_var)) +
-  geom_bar(stat = "identity",
-           position = "dodge") +
-  scale_y_continuous(labels = percent) + 
-  scale_fill_viridis_d(option = "H",
-                       direction = -1) +
-  labs(title = "Percent of Children Under 5 by Sub-Age Group, by Outcome",
-       subtitle = subtitle,
-       x = "",
-       y = "% of children <= 5 in group") +
-  theme_minimal() +
-  theme(legend.position = "bottom")
-}
-
-plot_age_in_outcome("incpov", "Income-to-Poverty Outcomes")
-plot_age_in_outcome("ccdf",   "CCDF Outcomes")
-```
-
-```{r merge and disaggregate tract-level estimates}
-# Round age values to ensure adding-up
-nowcast_parallel_counts <- 
-  nowcast_parallel_counts %>% 
-  mutate(count = round(count, 0)) %>% 
-  data.table()
-
-# Prep overall population for under 5 breakdown
-pop_by_age_long_0to5 <- 
-  pop_by_age_long_recency %>% 
-  select(
-    GEOID, year, age, pd, cps_base_recency, pop_count, pop_count_se) %>% 
-  filter(
-    age %in% c("age_0", "age_1", "age_2", "age_3", "age_4", "age_5"))
-  # Separate out the estimates for ages 0-5, which is the age group that we want
-  # to disaggregate with other population breakdown information
-
-nowcast_elig_counts_0to5 <- 
-  nowcast_parallel_counts %>% 
-  filter(age == "age_0to5") %>%
-  select(-age, -pop_count, -pop_count_se) %>% 
-  # /!\ We are no longer using data from the ACS1 data on the distribution of
-  # single ages <6, given how much apparent sampling variation there is. In 
-  # particular, in sample applications we saw that the overall age distribution 
-  # showed oddly uneven prevalence of certain individual ages, even unconditional
-  # on outcome variables. Now, in practice, we apply the eligibility share for
-  # the overall 0to5 to apply to all individual ages.
-  # merge(age_breakdown_byoutcome_long,
-  #       by = "outcome_var",
-  #       all.x = TRUE,
-  #       allow.cartesian = TRUE) %>% 
-  #   select(-pop_count) %>%
-  # mutate(count    = pct_age_of_0to5 * count,
-  #        count_se = pct_age_of_0to5 * count_se) %>% 
-  merge(
-    pop_by_age_long_0to5,
-    by = c("GEOID", "year", "pd", "cps_base_recency"),
-    all.x = TRUE,
-    allow.cartesian = TRUE) %>% 
-  # Apply the overall 0-5 share to the population counts of the individual-age
-  # population groups to obtain the new count and count_se estimates.
-  # /!\ Note that as of the current version of code, pop_count is still assumed
-  # to be measured without error. Otherwise, use of se_product() would be used.
-  mutate(
-    count    = pop_count*share,
-    count_se = se_product(share, pop_count, share_se, pop_count_se))
-
-# Add these by-single-age values to the other estimates we have so far
-nowcast_elig_counts_added_ages <- 
-  bind_rows(
-    nowcast_elig_counts_0to5,
-    nowcast_parallel_counts) %>% 
-  select(
-    outcome_var, GEOID, cps_base_recency, pd, year, age, 
-    share, share_se, count, count_se, pop_count, pop_count_se) %>% 
-  arrange(outcome_var, GEOID, pd, age) %>% 
-  data.table()
-
-```
-
-```{r function to build single ages--and portions thereof--into larger age groups}
-# Note: we interpret months to be the nth month that a child is "inside" of, rather
-# than a month of age that they have achieved. Thus: a child that has just been
-# born is in their first month, i.e. month 1, and a child that is in month 12 is
-# in their 12 month since birth, and this is an age just before turning 1. This
-# means that children aged 1-12 months are age 0, 13-24 are age 1, etc.
-
-apportion_ages <- function(low_month, high_month, age_desc, verbose = FALSE) {
-   low_age <- floor(( low_month)/12)
-  high_age <- floor((high_month)/12)
-  
-    low_keep_pct <- 1 - ( low_month %% 12) / 12
-   high_keep_pct <-     ((high_month + 1) %% 12) / 12
-   if ((high_month + 1) %% 12 == 0) {
-     high_keep_pct <- 1
-   }
-   
-   if (verbose) {
-     glue("Low/high months: {low_month}-{high_month}\n",
-          "Low/high ages: {low_age}-{high_age}\n",
-          "To preserve from low age/high age groups: {percent(low_keep_pct)}, {percent(high_keep_pct)}\n\n") %>% 
-       print()
-   }
-   
-   apportion_ages <- low_age:high_age
-   
-   apportioned <- 
-     nowcast_elig_counts_added_ages %>% 
-     # Collapse ages
-     filter(age %in% paste0("age_", apportion_ages)) %>% 
-     mutate(
-       # Determine keep pct for age of given row
-       keep_pct = 
-         case_when(age == glue("age_{low_age}")  ~ low_keep_pct,
-                   age == glue("age_{high_age}") ~ high_keep_pct,
-                   TRUE                          ~ 1),
-       
-       # Apply keep pct to each key field
-           count_upd     = keep_pct*count,
-           count_se_upd  = keep_pct*count_se,
-       pop_count_upd     = keep_pct*pop_count,
-       pop_count_se_upd  = keep_pct*pop_count_se,
-     )
-   
-   ### Prorate any overlap with ages 6-12
-   # /!\ Could arguably generalize this together with the above, since the
-   # single-age calculations above are special cases of this below
-   
-   high_month_6to12 <- 12*(12+1) - 1 # this is the last  month of age 12
-    low_month_6to12 <- 6*12          # this is the first month of age 6
-   nMonths_6to12 <- high_month_6to12 - low_month_6to12 + 1
-    
-   # Using a well-known equation to calculate the amount of overlap
-   overlap_6to12 <- min(high_month, high_month_6to12) - max(low_month, low_month_6to12) + 1
-   if (overlap_6to12 > 0) {
-     apportioned_6to12 <- 
-       nowcast_elig_counts_added_ages %>% 
-       # Collapse ages
-       filter(age == "age_6to12") %>% 
-       mutate(
-         # Determine keep pct for age of given row
-         keep_pct = overlap_6to12 / nMonths_6to12,
-         
-         # Apply keep pct to each key field
-         count_upd     = keep_pct*count,
-         count_se_upd  = keep_pct*count_se,
-         pop_count_upd     = keep_pct*pop_count,
-         pop_count_se_upd  = keep_pct*pop_count_se,
-       )
-     apportioned <-
-       bind_rows(apportioned,
-                 apportioned_6to12)
-   }
-   
-   if (verbose) {
-     print(
-       apportioned %>% 
-         filter(GEOID == GEOID[1],
-                outcome_var == outcome_var[1],
-                pd == "nowcast",
-                cps_base_recency == cps_base_recency[1]) %>% 
-       ggplot(aes(x = count,
-                  y = count_upd)) +
-         geom_point() + 
-         geom_abline() + 
-         scale_x_continuous(limits = c(0, NA)) +
-         scale_y_continuous(limits = c(0, NA)) +
-         facet_wrap(~age)
-     )
-   }
-   
-   collapsed <- 
-     apportioned %>% 
-     # Calculate variances from std err's for summing
-     mutate(    count_var_upd =     count_se_upd^2,
-            pop_count_var_upd = pop_count_se_upd^2) %>% 
-     # Aggregate ages to create the new group
-     summarize(    count    =      sum(count_upd),
-                   count_se = sqrt(sum(count_var_upd)),
-               pop_count    =      sum(pop_count_upd),
-               pop_count_se = sqrt(sum(pop_count_var_upd)),
-               .by = c(GEOID, outcome_var, cps_base_recency, pd, year)) %>% 
-     mutate(age = age_desc,
-            share = count / pop_count,
-            share_se = se_ratio(count, pop_count, count_se, pop_count_se)) %>% 
-     as.data.table()
-   
-   if (verbose) {
-     return(0)
-   } else {
-     return(collapsed)
-   }
-}
-
-# Check accuracy
-if (FALSE) {
-  apportion_ages( 0, 11, verbose = TRUE, age_desc = "age0")
-  apportion_ages(12, 23, verbose = TRUE, age_desc = "age1")
-  apportion_ages( 0, 14, verbose = TRUE, age_desc = "infant")
-  apportion_ages(15, 35, verbose = TRUE, age_desc = "toddler")
-  apportion_ages(0,  67, verbose = TRUE, age_desc = "age0to5")
-  apportion_ages(68,155, verbose = TRUE, age_desc = "age6to12")
-}
-
-```
-
-
-```{r run reaggregations to new age groups}
-
-nowcast_elig_counts_final <- NULL
-for (r in 1:nrow(age_aggs)) {
-  print(age_aggs$age_group[r])
-  print(age_aggs[r, ])
-  nowcast_elig_counts_final <-
-    bind_rows(nowcast_elig_counts_final,
-              apportion_ages( low_month = age_aggs$low_month[r],
-                             high_month = age_aggs$high_month[r],
-                             age_desc   = age_aggs$age_group[r]))
-  tabyl(nowcast_elig_counts_final$age)
-}
-
-# Examine a GEOID/outcome combo to check on reasonableness of aggregates/disaggregates
-if (FALSE) {
-  nowcast_elig_counts_final %>% 
-    filter(outcome_var == outcome_var[1],
-           GEOID == GEOID[1],
-           pd == "nowcast",
-           cps_base_recency == "allbase") %>% 
-    select(age, count, pop_count)
-}
-```
 
 ### Aggregate Estimates to Larger Geographies
 
@@ -336,54 +25,46 @@ add_agg_level <- function(ests, agg_level) {
     if (agg_level == "ZCTA") {
       geo_merge_data <- 
         geo_crosswalk_zcta %>% 
-        transmute(GEOID    = GEOID, 
-                  ZCTA     = ZCTA,
-                  geo_part = TRLANDPCT)
+        transmute(
+          GEOID    = GEOID, 
+          ZCTA     = ZCTA,
+          geo_part = TRLANDPCT
+        )
     } else if (agg_level == "school") {
       geo_merge_data <-
         geo_crosswalk_sd %>%
-        transmute(GEOID    = GEOID,
-                  school   = school,
-                  geo_part = pct_sd)
+        transmute(
+          GEOID    = GEOID,
+          school   = school,
+          geo_part = pct_sd
+        )
     } else if (agg_level == "County") {
       geo_merge_data <- 
         geo_crosswalk %>% 
-        transmute(GEOID    = GEOID, 
-                  County   = County, 
-                  geo_part = pct_area) %>% 
+        transmute(
+          GEOID    = GEOID, 
+          County   = County, 
+          geo_part = pct_area
+        ) %>% 
         unique()
     } else if (agg_level == "State") {
       geo_merge_data <- 
         geo_crosswalk %>% 
-        transmute(GEOID    = GEOID, 
-                  State    = my_state, 
-                  geo_part = 1) %>% 
+        transmute(
+          GEOID    = GEOID, 
+          State    = my_state, 
+          geo_part = 1
+        ) %>% 
         unique()
     } else if (agg_level == "aux_geo_label") {
       geo_merge_data <- 
         geo_crosswalk_aux %>% 
-        transmute(GEOID         = GEOID, 
-                  aux_geo_label = aux_geo_label, 
-                  geo_part      = pct_area)
-    } else if (str_detect(my_output_tag, "IECAM")) {
-      geo_merge_data <- 
-        geo_crosswalk_b5 %>% 
-        transmute(GEOID         = GEOID, 
-                  b5            = b5, 
-                  geo_part      = pct_b5)
-    } else if (str_detect(my_output_tag, "CECIDS") && agg_level == "distr") {
-      geo_merge_data <- 
-        geo_crosswalk_distr %>% 
-        transmute(GEOID         = GEOID, 
-                  distr         = LONGNAME,
-                  geo_part      = pct_area)
-    } else if (str_detect(my_output_tag, "CECIDS") && agg_level == "network") {
-      geo_merge_data <- 
-        geo_crosswalk_network %>% 
-        transmute(GEOID         = GEOID, 
-                  network       = planningzo,
-                  geo_part      = pct_area)
-    } 
+        transmute(
+          GEOID         = GEOID, 
+          aux_geo_label = aux_geo_label, 
+          geo_part      = pct_area
+        )
+    }
     
     ests <- 
       ests %>% 
@@ -394,8 +75,10 @@ add_agg_level <- function(ests, agg_level) {
       # and time repeats, as well as in `geo_merge_data` given that tracts often
       # do span multiple zip codes. The `allow.cartesian=TRUE` option in merge()
       # was yielding incorrect and puzzling results.
-      left_join(geo_merge_data,
-                by = "GEOID") %>% 
+      left_join(
+        geo_merge_data,
+        by = "GEOID"
+      ) %>% 
       data.table()
   }
   
@@ -412,13 +95,17 @@ add_agg_level <- function(ests, agg_level) {
 agg_tracts_up <- function(ests, agg_level) {
   ests %>%
     add_agg_level(agg_level) %>% 
-    .[j = .(count        = sumNA(pop_count*share*geo_part),
-            count_se     = se_sum(se_product(pop_count*geo_part, share, pop_count_se*geo_part, share_se)),
-            pop_count    = sumNA(pop_count*geo_part),
-            pop_count_se = se_sum(pop_count_se*geo_part)),
-      by = c(agg_level, "age", "pd", "outcome_var", "cps_base_recency")] %>% 
-    mutate(share    = count / pop_count,
-           share_se = se_proportion(count, pop_count, count_se, pop_count_se))
+    summarize(
+      .by = c(agg_level, "age", "pd", "outcome_var", "cps_base_recency"),
+      
+      count        = sumNA(pop_count*share*geo_part),
+      count_se     = se_sum(se_product(pop_count*geo_part, share, pop_count_se*geo_part, share_se)),
+      pop_count    = sumNA(pop_count*geo_part),
+      pop_count_se = se_sum(pop_count_se*geo_part)) %>% 
+    mutate(
+      share    = count / pop_count,
+      share_se = se_proportion(count, pop_count, count_se, pop_count_se)
+    )
 }
 ```
 
@@ -428,22 +115,14 @@ agg_tracts_up <- function(ests, agg_level) {
 # many-to-many relationship between `x` and `y`." This is expected, given 
 # how this is a feature of crossing geographies.
 
-nowcast_agg_tract <- agg_tracts_up(nowcast_elig_counts_final, "GEOID")
-nowcast_agg_zip   <- agg_tracts_up(nowcast_elig_counts_final, "ZCTA")
-nowcast_agg_cty   <- agg_tracts_up(nowcast_elig_counts_final, "County")
-nowcast_agg_sd    <- agg_tracts_up(nowcast_elig_counts_final, "school")
-nowcast_agg_st    <- agg_tracts_up(nowcast_elig_counts_final, "State")
+nowcast_agg_tract <- agg_tracts_up(nowcast_parallel_counts, "GEOID")
+nowcast_agg_zip   <- agg_tracts_up(nowcast_parallel_counts, "ZCTA")
+nowcast_agg_cty   <- agg_tracts_up(nowcast_parallel_counts, "County")
+nowcast_agg_sd    <- agg_tracts_up(nowcast_parallel_counts, "school")
+nowcast_agg_st    <- agg_tracts_up(nowcast_parallel_counts, "State")
 
 if (exists("my_aux_geo")) {
-  nowcast_agg_aux <- agg_tracts_up(nowcast_elig_counts_final, "aux_geo_label")  
-}
-
-if (str_detect(my_output_tag, "IECAM")) {
-  nowcast_agg_b5 <- agg_tracts_up(nowcast_elig_counts_final, "b5")
-}
-if (str_detect(my_output_tag, "CECIDS")) {
-  nowcast_agg_distr   <- agg_tracts_up(nowcast_elig_counts_final, "distr")
-  nowcast_agg_network <- agg_tracts_up(nowcast_elig_counts_final, "network")
+  nowcast_agg_aux <- agg_tracts_up(nowcast_parallel_counts, "aux_geo_label")  
 }
 
 ```
@@ -467,14 +146,6 @@ if (exists("my_aux_geo")) {
   my_write.csv(nowcast_agg_aux, glue("by {my_aux_geo_desc}"))
 }
 
-if (str_detect(my_output_tag, "IECAM")) {
-  my_write.csv(nowcast_agg_b5, "by b5 regions")
-}
-if (str_detect(my_output_tag, "CECIDS")) {
-  my_write.csv(nowcast_agg_distr,   "by local school district")
-  my_write.csv(nowcast_agg_network, "by CPS elementary network")
-}
-
 ```
 
 ```{r save final aggregates}
@@ -484,18 +155,14 @@ to_save <-
     "nowcast_agg_cty",
     "nowcast_agg_sd",
     "nowcast_agg_st")
+
 if (exists("my_aux_geo")) {
   to_save <- c(to_save, "nowcast_agg_aux")
 }
-if (str_detect(my_output_tag, "IECAM")) {
-  to_save <- c(to_save, "nowcast_agg_b5")
-}
-if (str_detect(my_output_tag, "CECIDS")) {
-  to_save <- c(to_save, "nowcast_agg_distr")
-  to_save <- c(to_save, "nowcast_agg_network")
-}
 
-save(list = to_save,
-     file = glue("{output_path}Final ELPEP Estimates in Multiple Geographic Aggregates - {my_output_tag}.Rda"))
+save(
+  list = to_save,
+  file = glue("{output_path}Final ELPEP Estimates in Multiple Geographic Aggregates - {my_output_tag}.Rda")
+)
 ```
 
