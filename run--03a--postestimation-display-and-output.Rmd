@@ -56,23 +56,25 @@ nowcast_parallel_setup <-
 # step would be to produce different runs of the SAE, although this is currently
 # highly time-consuming.
 
-# nowcast_parallel_incpov_019_le130 <-
-#   nowcast_parallel_setup %>%
-#   filter(
-#     outcome_var == "bIncpov_le130",
-#     str_detect(sae_spec, "019_inc$"),
-#     age == "Age0to19"
-#   ) %>%
-#   mutate(base_share = share_0_75 + share_75_130)
-# 
-# nowcast_parallel_incpov_019_le205 <-
-#   nowcast_parallel_setup %>%
-#   filter(
-#     outcome_var == "bIncpov_le205",
-#     str_detect(sae_spec, "019_inc$"),
-#     age == "Age0to19"
-#   ) %>%
-#   mutate(base_share = share_0_75 + share_75_130 + share_130_200)
+nowcast_parallel_incpov_019_le130 <-
+  nowcast_parallel_setup %>%
+  filter(
+    outcome_var == "bIncpov_le130",
+    str_detect(sae_spec, "inc$"),
+    age == "Age0to19"
+  ) %>%
+  mutate(
+    base_share = share_0_75 + share_75_130
+  )
+
+nowcast_parallel_incpov_019_le205 <-
+  nowcast_parallel_setup %>%
+  filter(
+    outcome_var == "bIncpov_le205",
+    str_detect(sae_spec, "inc$"),
+    age == "Age0to19"
+  ) %>%
+  mutate(base_share = share_0_75 + share_75_130 + share_130_200)
 
 nowcast_parallel_incpov_2064_le130 <- 
   nowcast_parallel_setup %>% 
@@ -99,8 +101,8 @@ nowcast_parallel_incpov_2064_le138 <-
 
 bind_list <- 
   list(
-    # nowcast_parallel_incpov_019_le130,
-    # nowcast_parallel_incpov_019_le205,
+    nowcast_parallel_incpov_019_le130,
+    nowcast_parallel_incpov_019_le205,
     nowcast_parallel_incpov_2064_le130,
     nowcast_parallel_incpov_2064_le138
   )

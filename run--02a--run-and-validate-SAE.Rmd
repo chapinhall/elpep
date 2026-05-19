@@ -370,7 +370,7 @@ if (parallelize_sae) {
   
 } else {
   
-  # sae_results_019_inc    = run_saes_byCtrls(inc_cat_field, acs1_elig019_sae,    sae_controls_019_inc)
+  sae_results_019_inc    = run_saes_byCtrls(inc_cat_field, acs1_elig019_sae,    sae_controls_019_inc)
   sae_results_2064_inc   = run_saes_byCtrls(inc_cat_field, acs1_elig2064_sae,   sae_controls_2064_inc)
   # sae_results_incwork_65 = run_saes_byCtrls(inc_cat_field, acs1_elig65plus_sae, sae_controls_65plus_inc)
   
@@ -528,24 +528,24 @@ sae_results_2064_inc[["agg_comp_model"]]$agg_comp_plot +
 ```{r compare correlations between puma-level observed and predicted values - fay herriot, eval = developer_mode}
 r3 <- function(x) round(x, 3)
 cbind(
-  sae_controls_019_inc[["agg_comp_fh"]]$agg_comp_cor        %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
-  sae_controls_2064_inc[["agg_comp_fh"]]$agg_comp_cor       %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64),
-  sae_controls_65plus_inc[["agg_comp_fh"]]$agg_comp_cor     %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
-  sae_controls_019_incwork[["agg_comp_fh"]]$agg_comp_cor    %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
-  sae_controls_2064_incwork[["agg_comp_fh"]]$agg_comp_cor   %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64),
-  sae_controls_65plus_incwork[["agg_comp_fh"]]$agg_comp_cor %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
+  sae_results_019_inc[["agg_comp_fh"]]$agg_comp_cor        %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
+  sae_results_2064_inc[["agg_comp_fh"]]$agg_comp_cor       %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64)
+  # sae_results_65plus_inc[["agg_comp_fh"]]$agg_comp_cor     %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
+  # sae_results_019_incwork[["agg_comp_fh"]]$agg_comp_cor    %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
+  # sae_results_2064_incwork[["agg_comp_fh"]]$agg_comp_cor   %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64),
+  # sae_results_65plus_incwork[["agg_comp_fh"]]$agg_comp_cor %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
 ) %>% 
   kable(caption = "Correlation of PUMA-level Observed and SAE Values from the Fay-Herriot Method")
 ```
 
 ```{r compare correlations between puma-level observed and predicted values - model, eval = developer_mode}
 cbind(
-  sae_controls_019_inc[["agg_comp_model"]]$agg_comp_cor        %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
-  sae_controls_2064_inc[["agg_comp_model"]]$agg_comp_cor       %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64),
-  sae_controls_65plus_inc[["agg_comp_model"]]$agg_comp_cor     %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
-  sae_controls_019_incwork[["agg_comp_model"]]$agg_comp_cor    %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
-  sae_controls_2064_incwork[["agg_comp_model"]]$agg_comp_cor   %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64),
-  sae_controls_65plus_incwork[["agg_comp_model"]]$agg_comp_cor %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
+  sae_results_019_inc[["agg_comp_model"]]$agg_comp_cor        %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
+  sae_results_2064_inc[["agg_comp_model"]]$agg_comp_cor       %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64)
+  # sae_results_65plus_inc[["agg_comp_model"]]$agg_comp_cor     %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
+  # sae_results_019_incwork[["agg_comp_model"]]$agg_comp_cor    %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
+  # sae_results_2064_incwork[["agg_comp_model"]]$agg_comp_cor   %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64),
+  # sae_results_65plus_incwork[["agg_comp_model"]]$agg_comp_cor %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
 ) %>% 
   kable(caption = "Correlation of PUMA-level Observed and SAE Values from the Fay-Herriot Method")
   # Note that these estimates will naturally be below those of the FH method, which blends the 
@@ -699,13 +699,13 @@ diagnostic_note <-
 acs5_compression_measure <- "Observed ACS 5-year Inc-to-Pov <130% FPL"
 sae_measure_label <- "SAE Estimate of Inc-to-Pov < 130% FPL"
 
-# compare_sae_lt125fpl(
-#   sae_results_019_inc$sae_out,
-#   title = diagnostic_note,
-#   xlab = glue("{acs5_compression_measure}, Ages 0-19"),
-#   ylab = glue("{sae_measure_label}, Age 0-19")
-# ) +
-#   theme_minimal()
+compare_sae_lt125fpl(
+  sae_results_019_inc$sae_out,
+  title = diagnostic_note,
+  xlab = glue("{acs5_compression_measure}, Ages 0-19"),
+  ylab = glue("{sae_measure_label}, Age 0-19")
+) +
+  theme_minimal()
 
 compare_sae_lt125fpl(
   sae_results_2064_inc$sae_out,
