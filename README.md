@@ -26,16 +26,19 @@ A full technical report, including fully typeset description of methods, but to 
 4. Click "Select Samples", make sure "cross-sectional" is selected for the sample selections. Under "BASIC MONTHLY", select January 2007-December 2009 and January 2019-most recent month, and click "Submit Sample Selections"
 5. Select the following variables:
 * HOUSEHOLD - CORE
-	- TECHNICAL: YEAR, SERIAL, MONTH, HWTFINL, ASECFLAG
+	- TECHNICAL: YEAR, SERIAL, MONTH, HWTFINL, ASECFLAG, ASECWTH
 	- GEOGRAPHIC: STATEFIP, COUNTY, METAREA, METRO
 	- ECONOMIC CHARACTERISTICS: HHINCOME, FAMINC
+	- LINKING: CPSID
 * PERSON - CORE
-	- DEMOGRAPHICS: RELATE, AGE, SEX, RACE, MARST
+	- DEMOGRAPHICS: RELATE, AGE, SEX, RACE, MARST, VETSTAT
 	- FAMILY INTERRELATIONSHIPS: MOMLOC, MOMLOC2, POPLOC, POPLOC2, SPLOC, FAMUNIT
 	- ETHNICITY/NATIVITY: HISPAN
-	- WORK: EMPSTAT, LABFORCE, OCC, IND, CLASSWKR
+	- WORK: EMPSTAT, LABFORCE, OCC, IND, CLASSWKR, UHRSWORKT, UHRSWORK1
 	- EDUCATION: EDUC, SCHLCOLL
-	- TECHNICAL: PERNUM, WTFINL, FAMID
+	- DISABILITY: DIFFHEAR, DIFFEYE, DIFFREM, DIFFPHYS, DIFFMOB, DIFFCARE, DIFFANY
+	- LINKING: CPSIDP
+	- TECHNICAL: PERNUM, WTFINL, ASECWT, FAMID
 6. Click "View cart"
 7. Click "Create Data Extract"
 8. When the data extract is complete, download the data and the DDI file to the input folder. The file extension of the data file should appear as `csv.gz` in the input folder. For the DDI file, right-click on the "DDI" link to save the file in the input folder.
