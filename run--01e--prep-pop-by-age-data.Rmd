@@ -70,7 +70,8 @@ get_puma_totals <- function(bounds) {
     ) %>% 
     summarize(
       .by = PUMA,
-      n_p_to = sum(PWGTP))
+      n_p_to = sum(PWGTP)
+    )
 }
 
 stopifnot(
@@ -198,7 +199,17 @@ pop_age_t_calib <-
     c(
       "nAge0to19",
       "nAge20to64",
-      "nAge65plus"
+      "nAge65plus",
+      
+      "nAge0to4",
+      "nAge5to8",
+      "nAge9to15",
+      "nAge16to18",
+      "nAge19to25",
+      "nAge26to34",
+      "nAge35to44",
+      "nAge45to54",
+      "nAge55to64"
     )
   )
 
