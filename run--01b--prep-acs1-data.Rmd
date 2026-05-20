@@ -175,13 +175,23 @@ acs1_recoded <-
     bGender_F = 1*(cGender == "Female"),
      
     # Create age groups
+    # These are made to align with:
+    # 1. categories ("cAge") that will be "thick" enough cells to estimate in the 
+    #    SAE code, while still being demographically distinct enough to have
+    #    their own patterns of prediction
+    # 2. binary flags ("bAge#to#") that help the overall population code calibrate
+    #    ACS5 totals at the PUMA level, within population age ranges that are
+    #    aligned with final reporting categories
     cAge = 
       case_when(
-        # AGEP %in%  0:5  ~ "Age0to5",
-        # AGEP %in%  6:14 ~ "Age6to14",
-        # AGEP %in% 15:19 ~ "Age15to19",
-        AGEP %in%  0:19 ~ "Age0to19",
-        AGEP %in% 20:64 ~ "Age20to64",
+        AGEP %in%  0:5  ~ "Age0to5",
+        AGEP %in%  6:18 ~ "Age6to18",
+        # AGEP %in% 16:18 ~ "Age16to18",
+        AGEP %in% 19:25 ~ "Age19to25",
+        AGEP %in% 25:44 ~ "Age25to44",
+        AGEP %in% 45:64 ~ "Age25to44",
+        # AGEP %in%  0:19 ~ "Age0to19",
+        # AGEP %in% 20:64 ~ "Age20to64",
         AGEP >= 65      ~ "Age65plus"
       ),
     bAge0to5   = 1*between(AGEP,  0,  5),
@@ -190,6 +200,16 @@ acs1_recoded <-
     bAge0to19  = 1*between(AGEP,  0, 19),
     bAge20to64 = 1*between(AGEP, 20, 64),
     bAge65plus = 1*(AGEP >= 65),
+    
+    bAge0to4   = 1*between(AGEP,  0,  4),
+    bAge5to8   = 1*between(AGEP,  5,  8),
+    bAge9to15  = 1*between(AGEP,  9, 15),
+    bAge16to18 = 1*between(AGEP, 16, 18),
+    bAge19to25 = 1*between(AGEP, 19, 25),
+    bAge26to34 = 1*between(AGEP, 26, 34),
+    bAge35to44 = 1*between(AGEP, 35, 44),
+    bAge45to54 = 1*between(AGEP, 45, 54),
+    bAge55to64 = 1*between(AGEP, 55, 64),
     
     # Recode race and ethnicity
     cRace =
