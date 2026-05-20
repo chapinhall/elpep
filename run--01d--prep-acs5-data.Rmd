@@ -79,7 +79,8 @@ inspect_fields(
   show_all_combos = FALSE
 )
 
-acs5_pop_by_age <- 
+# Develop age estimates related to the original ACS division of age groups
+acs5_pop_by_age_wide <- 
   acs5_sex_by_age_pull %>% 
   filter(
     !str_detect(age, "All")
@@ -87,98 +88,117 @@ acs5_pop_by_age <-
   construct_fields(
     numerator = "age"
   )
-```
 
-
-```{r split ages 18 to 19 and add to existing population pull}
-# Split the age18to19 group in half
-acs5_pop_by_age_split1819 <- 
+acs5_pop_by_age_long <- 
   acs5_sex_by_age_pull %>% 
   filter(
-    age == "Age18to19"
+    !str_detect(age, "All")
+  ) %>% 
+  construct_fields(
+    numerator = "age",
+    wide = FALSE
+  )
+
+```
+
+```{r develop function to build custom constructions of age ranges}
+
+# To allow for a general partition, split the ACS5 age groups into single-age
+# values
+acs5_pop_by_age_split <- 
+  acs5_sex_by_age_pull %>% 
+  filter(
+    !str_detect(age, "All")
   ) %>% 
   mutate(
-    estimate = estimate / 2,
-    moe      =      moe / 2,
-    se       =       se / 2
+    lb = str_replace_all(age, "Age(\\d+)(to|plus)(\\d+)", "\\1") %>% as.numeric(),
+    ub = str_replace_all(age, "Age(\\d+)(to|plus)(\\d+)", "\\3") %>% as.numeric() %>% replace_na(Inf),
+    nAges = ub - lb + 1
+  ) %>% 
+  reframe(
+    .by = c(GEOID, sex, age),
+    estimate = estimate / nAges,
+    se       = se       / nAges,
+    age = lb:ub
   )
 
-acs5_pop_by_age_split1819 <- 
-  bind_rows(
-    acs5_pop_by_age_split1819 %>% mutate(age = "Age18"),
-    acs5_pop_by_age_split1819 %>% mutate(age = "Age19")
-  )
-
-stopifnot(
-  all(
-    with(
-      acs5_pop_by_age_split1819,
-      estimate[age == "Age18"] == estimate[age == "Age19"]
-    )
-  )
-)
-
-# Add these values to the existing data
-acs5_pop_by_age_aug <- 
-  bind_rows(
-    acs5_sex_by_age_pull,
-    acs5_pop_by_age_split1819
-  )
-  
-# Check that this is as expected
+# inspect this stage
 if (FALSE) {
-  acs5_pop_by_age_custom %>% 
-    filter(
-      GEOID == GEOID[1]
-    ) %>% 
-    filter(
-      age %in% c("Age18to19", "Age18", "Age19")
-    )  
-}
-```
-
-
-```{r build custom aggregations of ages}
-# Examine range of ages in naturally sorted order
-if (FALSE) {
-  sort(sort_by_char_nums(acs5_pop_by_age_aug$age %>% unique())) %>% as.character()  
+  acs5_pop_by_age_long  %>% filter(GEOID == GEOID[1])
+  acs5_pop_by_age_split %>% filter(GEOID == GEOID[1])
 }
 
-# Add key population ranges
-acs5_pop_by_age_custom <- 
-  acs5_pop_by_age_aug %>% 
+# Group ages according to custom age partition
+age_right_cuts <- c(0, 4, 8, 15, 18, 25, 34, 44, 54, 64, Inf)
+acs5_pop_by_age_realigned <- 
+  acs5_pop_by_age_split %>% 
   mutate(
-    age_agg = 
-      case_when(
-        age %in% c("Age0to5",   "Age5to9",   "Age10to14", "Age15to17", "Age18to19") ~ "Age0to19",
-        age %in% c("Age20to20", "Age21to21", "Age22to24", "Age25to29", "Age30to34", 
-                   "Age35to39", "Age40to44", "Age45to49", "Age50to54", "Age55to59", 
-                   "Age60to61", "Age62to64")                                        ~ "Age20to64",
-        age %in% c("Age65to66", "Age67to69", "Age70to74", "Age75to79", "Age80to85", 
-                   "Age85to85")                                                     ~ "Age65plus"
-      )
-    ) %>% 
-  filter(
-    age_agg %in% c("Age0to19", "Age20to64", "Age65plus")
+    age_group = 
+      cut(
+        age, 
+        breaks = age_right_cuts, 
+        include.lowest = TRUE
+      ) %>% 
+      as.character(),
+    lb = str_replace(age_group, ".(\\d+).+", "\\1"),
+    ub = str_replace(age_group, ".+,(\\d+).", "\\1"),
+    lb = lb %>% as.numeric() + 1*str_detect(age_group, "^\\("),
+    ub = ub %>% as.numeric() %>% replace_na(99),
+    age_group = glue("Age{lb}to{ub}") %>% str_replace("to99", "plus")
+  ) %>% 
+  rename(
+    age_old = age,
+    age     = age_group
   )
 
+# Check assignment
 if (FALSE) {
-  acs5_pop_by_age_custom %>% 
-    select(age, age_agg) %>% 
-    mutate(
-      age = sort_by_char_nums(age)
-    ) %>% 
+  acs5_pop_by_age_realigned %>% 
+    select(age_old, age) %>% 
     unique() %>% 
-    arrange(age)
+    arrange(age) %>% 
+    View("Check ACS5 age mapping")
 }
 
-
-acs5_pop_by_age_agg <- 
-  acs5_pop_by_age_custom %>% 
+# Sum to desired partition
+acs5_pop_by_age_custom <- 
+  acs5_pop_by_age_realigned %>% 
   construct_fields(
-    numerator = "age_agg"
+    numerator = "age"
   )
+
+acs5_pop_by_age_custom_long <- 
+  acs5_pop_by_age_realigned %>% 
+  construct_fields(
+    numerator = "age",
+    wide = FALSE
+  )
+
+
+# Examine correspondence with previous calculations
+if (FALSE) {
+  rbind(
+    acs5_pop_by_age_custom_long %>% filter(age == "Age0to4", GEOID == GEOID[1]),
+    acs5_pop_by_age_long        %>% filter(age == "Age0to5", GEOID == acs5_pop_by_age_custom$GEOID[1])
+  )
+}
+
 ```
+
+```{r combine calculations by age and custom categories and remove redundancy}
+custom_cols <- cn(acs5_pop_by_age_custom)
+non_dup_cols <- custom_cols[!custom_cols %in% cn(acs5_pop_by_age_wide)]
+
+acs5_pop_by_age_combo <- 
+  acs5_pop_by_age_wide %>% 
+  merge(
+    acs5_pop_by_age_custom %>% 
+      select(all_of(c("GEOID", non_dup_cols))),
+    by = "GEOID"
+  )
+
+```
+
 
 
 ## Population Under 18 Years of Age
@@ -700,8 +720,7 @@ acs5_healthins <-
 ```{r collect}
 acs5_tomerge <- 
   list(
-    acs5_pop_by_age, 
-    acs5_pop_by_age_agg,
+    acs5_pop_by_age_combo,
     #acs5_pop_by_age_lt18, # This includes duplicates to acs5_pop_by_age. Is left out until needed.
     #acs5_pov_bySexAge, 
     acs5_incpov_byage, 
