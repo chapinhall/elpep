@@ -523,40 +523,48 @@ for (out_var in c("ccdf", "le100", "le200")) {
     out_var_name <- "incpov_le200_post_adj"
   }
   
-  static_map_level_diff(estimates = nowcast_agg_zip %>% filter(age == age_agg_main),
-                        geo_level = "ZCTA",
-                        outcome = out_var_name,
-                        field_desc = out_var_desc,
-                        save_map = TRUE, 
-                        #val_limits = c(0, 0.6),
-                        show_legend = TRUE)
+  static_map_level_diff(
+    estimates = nowcast_agg_zip %>% filter(age == age_agg_main),
+    geo_level = "ZCTA",
+    outcome = out_var_name,
+    field_desc = out_var_desc,
+    save_map = TRUE, 
+    #val_limits = c(0, 0.6),
+    show_legend = TRUE
+  )
   
-  static_map_level_diff(estimates = nowcast_agg_cty %>% filter(age == age_agg_main),
-                        geo_level = "County",
-                        outcome = out_var_name,
-                        field_desc = out_var_desc,
-                        save_map = TRUE, 
-                        #val_limits = c(0, 0.6),
-                        show_legend = TRUE)
+  static_map_level_diff(
+    estimates = nowcast_agg_cty %>% filter(age == age_agg_main),
+    geo_level = "County",
+    outcome = out_var_name,
+    field_desc = out_var_desc,
+    save_map = TRUE, 
+    #val_limits = c(0, 0.6),
+    show_legend = TRUE
+  )
   
-  static_map_level_diff(estimates = nowcast_agg_sd %>% filter(age == age_agg_main),
-                        geo_level = "school",
-                        outcome = out_var_name,
-                        field_desc = out_var_desc,
-                        save_map = TRUE, 
-                        #val_limits = c(0, 0.6),
-                        show_legend = TRUE)
+  static_map_level_diff(
+    estimates = nowcast_agg_sd %>% filter(age == age_agg_main),
+    geo_level = "school",
+    outcome = out_var_name,
+    field_desc = out_var_desc,
+    save_map = TRUE, 
+    #val_limits = c(0, 0.6),
+    show_legend = TRUE
+  )
   
   if (exists("my_aux_geo")) {
-    static_map_level_diff(estimates = nowcast_agg_aux %>% filter(age == age_agg_main),
-                          geo_level = "aux",
-                          geo_level_merge_field = "aux_geo_label",
-                          geo_level_desc = my_aux_geo_desc,
-                          outcome = out_var_name,
-                          field_desc = out_var_desc,
-                          save_map = TRUE, 
-                          #val_limits = c(0, 0.6),
-                          show_legend = TRUE) 
+    static_map_level_diff(
+      estimates = nowcast_agg_aux %>% filter(age == age_agg_main),
+      geo_level = "aux",
+      geo_level_merge_field = "aux_geo_label",
+      geo_level_desc = my_aux_geo_desc,
+      outcome = out_var_name,
+      field_desc = out_var_desc,
+      save_map = TRUE, 
+      #val_limits = c(0, 0.6),
+      show_legend = TRUE
+    ) 
   }
 }
 ```
@@ -614,20 +622,22 @@ if (exists("map_geos")) {
         inc_thresh <- str_extract(o, "\\d+$")
         
         my_plot_ranged <- 
-          static_map_val(estimates = ests_ag,
-                         geo_level = "tract",
-                         geo_level_merge_field = "GEOID",
-                         outcome = o,
-                         field_desc = 
-                           glue("{local_ccdf_name_short} Eligibility - ",
-                                "{inc_thresh}% {prog_income_thresh_label}, {age_desc} ",
-                                "({date_range})"),
-                         val_limits = share_range,
-                         show_legend = TRUE,
-                         map_title = g,
-                         plot_stat = "nowcast",
-                         file_tag = glue(" - {g}"),
-                         save_map = FALSE)
+          static_map_val(
+            estimates = ests_ag,
+            geo_level = "tract",
+            geo_level_merge_field = "GEOID",
+            outcome = o,
+            field_desc = 
+              glue("{local_ccdf_name_short} Eligibility - ",
+                   "{inc_thresh}% {prog_income_thresh_label}, {age_desc} ",
+                   "({date_range})"),
+            val_limits = share_range,
+            show_legend = TRUE,
+            map_title = g,
+            plot_stat = "nowcast",
+            file_tag = glue(" - {g}"),
+            save_map = FALSE
+          )
         
         # lMap_out[["maps_by_inc"]] <- 
         #   append(lMap_out[["maps_by_inc"]],
@@ -640,20 +650,22 @@ if (exists("map_geos")) {
         # across other income thresholds)
         if (str_detect(o, as.character(local_ccdf_incratio_base))) {
           my_plot_unranged <- 
-            static_map_val(estimates = ests_ag,
-                           geo_level = "tract",
-                           geo_level_merge_field = "GEOID",
-                           outcome = o,
-                           field_desc = 
-                             glue("{local_ccdf_name_short} Eligibility - ",
-                                  "{inc_thresh}% {prog_income_thresh_label}, {age_desc} ",
-                                  "({date_range})"),
-                           val_limits = NULL,
-                           show_legend = TRUE,
-                           map_title = g,
-                           plot_stat = "nowcast",
-                           file_tag = glue(" - {g} - geographic contrast"),
-                           save_map = FALSE)
+            static_map_val(
+              estimates = ests_ag,
+              geo_level = "tract",
+              geo_level_merge_field = "GEOID",
+              outcome = o,
+              field_desc = 
+                glue("{local_ccdf_name_short} Eligibility - ",
+                     "{inc_thresh}% {prog_income_thresh_label}, {age_desc} ",
+                     "({date_range})"),
+              val_limits = NULL,
+              show_legend = TRUE,
+              map_title = g,
+              plot_stat = "nowcast",
+              file_tag = glue(" - {g} - geographic contrast"),
+              save_map = FALSE
+            )
           
           lMap_out[["maps_by_geo"]][[length(lMap_out[["maps_by_geo"]]) + 1]] <- 
             my_plot_unranged
