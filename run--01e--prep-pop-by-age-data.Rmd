@@ -134,18 +134,25 @@ stopifnot(get_age_bounds("rAge65plus") == c(65, Inf))
 
 calibrate_counts <- function(age_var) {
   
-  my_bounds <- get_age_bounds(age_var)
+  # Get lower and upper bounds from variable name
+  my_bounds    <- get_age_bounds(age_var)
+  
+  # Summarize counts-by-PUMA in the ACS1 data
   age_counts_p <- get_puma_totals(my_bounds)
   
+  # In the tract-level file, develop factor for inflating ACS5 estimates
   ageCounts_pt %>% 
+    # Calculate total from ACS5
     mutate(
       .by = PUMA,
       n_p_from = sum(get(age_var))
     ) %>% 
+    # Merge in ACS1 PUMA-level counts
     merge(
       age_counts_p,
       by = "PUMA"
     ) %>% 
+    # Calculate and apply inflation factor to match ACS1 values
     mutate(
       calib_mult = n_p_to / n_p_from,
       calib = get(age_var) * calib_mult
@@ -197,9 +204,8 @@ batch_calibrations <- function(age_vars) {
 pop_age_t_calib <- 
   batch_calibrations(
     c(
-      "nAge0to19",
-      "nAge20to64",
-      "nAge65plus",
+      # "nAge0to19",
+      # "nAge20to64",
       
       "nAge0to4",
       "nAge5to8",
@@ -209,7 +215,13 @@ pop_age_t_calib <-
       "nAge26to34",
       "nAge35to44",
       "nAge45to54",
-      "nAge55to64"
+      "nAge55to64",
+      "nAge65plus",
+      
+      # Additional cuts
+      "nAge0to18",
+      "nAge26to44",
+      "nAge45to64"
     )
   )
 

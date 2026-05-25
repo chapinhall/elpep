@@ -30,7 +30,8 @@ show_acs1_cat_density <- function(my_cat, my_subtitle) {
     ) +
     geom_bar() +
     facet_wrap(
-      ~ cAge
+      ~ cAge,
+      scales = "free"
     ) +
     labs(
       title = "Number of ACS1 Sample Observations by Category Scheme",
@@ -44,12 +45,9 @@ show_acs1_cat_density <- function(my_cat, my_subtitle) {
 }
 
 if (FALSE) {
-  # show_acs1_cat_density(
-  #   "cFam_incpov_ratio_cat_by100",
-  #   "Income-to-Poverty by 100%s")  
   show_acs1_cat_density(
     "cFam_incpov_ratio_cat_with130",
-    "Income-to-Poverty with Detail Below Poverty")
+    "Income-to-Poverty including 130%")
   show_acs1_cat_density(
     "cWorkThresh_incpov_status130", 
     "Combo of Family Work Eligibility and Income-to-Poverty Aligned with Program Eligibility Thresholds")
@@ -59,35 +57,35 @@ if (FALSE) {
 
 ```{r function examine PUMA-level counts of each category}
 show_acs1_cat_density_by_puma <- function(my_cat, my_subtitle) {
- acs1_elig %>% 
+  acs1_elig %>% 
+    mutate(
+      cAge = sort_by_char_nums(cAge)
+    ) %>% 
     ggplot() +
     aes(
       x = PUMA
     ) +
-  geom_bar() +
-  facet_grid(
-    get(my_cat) ~ cAge,
-    scales = "free_y"
-  ) +
-  labs(
-    title = "Number of ACS1 Sample Observations by PUMA, by Age Group and Category",
-    subtitle = my_subtitle,
-    caption = "(Note: scale of y-axis varies to show detail)",
-    y = "Count of Observations in ACS1 Sample"
-  ) +
-  theme_minimal() + 
-  theme(
-    axis.text.x = element_text(angle = 90, hjust = 1)
-  )  
+    geom_bar() +
+    facet_wrap(
+      ~ cAge + get(my_cat),
+      #scales = "free_y"
+    ) +
+    labs(
+      title = "Number of ACS1 Sample Observations by PUMA, by Age Group and Category",
+      subtitle = my_subtitle,
+      caption = "(Note: scale of y-axis varies to show detail)",
+      y = "Count of Observations in ACS1 Sample"
+    ) +
+    theme_minimal() + 
+    theme(
+      axis.text.x = element_text(angle = 90, hjust = 1)
+    )  
 }
 
 if (FALSE) {
-  # show_acs1_cat_density_by_puma(
-  #   "cFam_incpov_ratio_cat_by100", 
-  #   "Income-to-Poverty Ratio, with Detail Below 100% FPL")  
   show_acs1_cat_density_by_puma(
-    "cFam_incpov_ratio_cat_with130", 
-    "Combo of Family Work Eligibility and Income-to-Poverty Aligned with Program Eligibility Thresholds")
+    "cFam_incpov_ratio_cat_with130",
+    "Income-to-Poverty Ratio including 130% Cuts")
   show_acs1_cat_density_by_puma(
     "cWorkThresh_incpov_status130", 
     "Combo of Family Work Eligibility and Income-to-Poverty Aligned with Program Eligibility Thresholds")
@@ -111,11 +109,8 @@ if (FALSE) {
 
 acs1_puma_stats <- 
   acs1_elig %>% 
-  filter(
-    AGEP %in% 18:64
-  ) %>% 
   summarize(
-    .by = PUMA,
+    .by = c(PUMA, cAge),
     rIncPov0to75_Age18to64_acs1 = sum(PWGTP[fam_incpov_ratio <= 0.75]) / sum(PWGTP)
   )
   
@@ -143,17 +138,19 @@ ggplot() +
   ) +
   geom_density(
     data = acs1_puma_stats,
-    aes(x = rIncPov0to75_Age18to64_acs1),
-    color = "orange"
+    aes(
+      x = rIncPov0to75_Age18to64_acs1,
+      color = cAge
+    )
   ) +
   scale_x_continuous(
     labels = percent
   ) + 
   labs(
     title = "Comparing Distributions of Income <75% FPL for Individuals Aged 18-64",
-    subtitle = glue("<span style='color:blue'>PUMA-level ACS1-year Data for {base_year}</span><br>",
-                    "<span style='color:red'>Tract-level ACS5-year Data for {acs5_year-4}-{acs5_year}</span><br>",
-                    "<span style='color:orange'>PUMA-level ACS5-year Data for {acs5_year-4}-{acs5_year}</span>"),
+    # subtitle = glue("<span style='color:blue'>PUMA-level ACS1-year Data for {base_year}</span><br>",
+    #                 "<span style='color:red'>Tract-level ACS5-year Data for {acs5_year-4}-{acs5_year}</span><br>",
+    #                 "<span style='color:orange'>PUMA-level ACS5-year Data for {acs5_year-4}-{acs5_year}</span>"),
     # subtitle = glue("ACS1 data reflects PUMA-level values for {base_year}\n",
     #                 "ACS5 data reflects tract-level values for 2015-2019"),
     x = "Poverty Rate for Individuals Age 18-64",
@@ -207,18 +204,24 @@ sae_controls_workstatus <-
   c("rEmpl_Male", "rEmpl_Female",
     "rUnmarriedFemaleHh", "rUnmarriedMaleHh") # reference: "rMarried", 
 
-sae_controls_019_inc        <- c(sae_controls_incpov_Age0to19, sae_controls_ed)
-sae_controls_019_incwork    <- c(sae_controls_incpov_Age0to19, sae_controls_ed, sae_controls_workstatus)
-
-sae_controls_2064_inc       <- c(sae_controls_incpov_Age20to64, sae_controls_ed)
-sae_controls_2064_incwork   <- c(sae_controls_incpov_Age20to64, sae_controls_ed, sae_controls_workstatus)
-
-sae_controls_65_inc     <- c(sae_controls_incpov_Age65plus, sae_controls_ed)
-sae_controls_65_incwork <- c(sae_controls_incpov_Age65plus, sae_controls_ed, sae_controls_workstatus)
-
 stopifnot(all(c(sae_controls_019_inc, sae_controls_019_incwork)   %in% colnames(acs5tract)))
 stopifnot(all(c(sae_controls_2064_inc, sae_controls_2064_incwork) %in% colnames(acs5tract)))
 stopifnot(all(c(sae_controls_65_inc,  sae_controls_65_incwork)    %in% colnames(acs5tract)))
+
+sae_controls_018_inc        <- c(sae_controls_incpov_Age0to19, sae_controls_ed)
+sae_controls_018_incwork    <- c(sae_controls_incpov_Age0to19, sae_controls_ed, sae_controls_workstatus)
+
+sae_controls_1925_inc       <- c(sae_controls_incpov_Age20to64, sae_controls_ed)
+sae_controls_1925_incwork   <- c(sae_controls_incpov_Age20to64, sae_controls_ed, sae_controls_workstatus)
+
+sae_controls_2644_inc       <- c(sae_controls_incpov_Age20to44, sae_controls_ed)
+sae_controls_2644_incwork   <- c(sae_controls_incpov_Age20to44, sae_controls_ed, sae_controls_workstatus)
+
+sae_controls_4564_inc       <- c(sae_controls_incpov_Age20to64, sae_controls_ed)
+sae_controls_4564_incwork   <- c(sae_controls_incpov_Age20to64, sae_controls_ed, sae_controls_workstatus)
+
+sae_controls_65_inc     <- c(sae_controls_incpov_Age65plus, sae_controls_ed)
+sae_controls_65_incwork <- c(sae_controls_incpov_Age65plus, sae_controls_ed, sae_controls_workstatus)
 
 ```
 
@@ -226,8 +229,10 @@ stopifnot(all(c(sae_controls_65_inc,  sae_controls_65_incwork)    %in% colnames(
 acs1_elig <- mutate(acs1_elig, PUMA = pad_num_left(PUMA, 5))
 stopifnot(all(geo_crosswalk$PUMA %in% acs1_elig$PUMA))
 
-acs1_elig019_sae    <- filter(acs1_elig, between(AGEP,  0, 19))
-acs1_elig2064_sae   <- filter(acs1_elig, between(AGEP, 20, 64))
+acs1_elig018_sae    <- filter(acs1_elig, between(AGEP,  0, 18))
+acs1_elig1925_sae   <- filter(acs1_elig, between(AGEP, 19, 25))
+acs1_elig2644_sae   <- filter(acs1_elig, between(AGEP, 26, 44))
+acs1_elig4564_sae   <- filter(acs1_elig, between(AGEP, 45, 64))
 acs1_elig65plus_sae <- filter(acs1_elig, AGEP >= 65)
 
 acs5tract_sae <- 
@@ -235,10 +240,14 @@ acs5tract_sae <-
   select(
     all_of(
       c("GEOID",
-        sae_controls_019_inc,
-        sae_controls_019_incwork,
-        sae_controls_2064_inc,
-        sae_controls_2064_incwork,
+        sae_controls_018_inc,
+        sae_controls_018_incwork,
+        sae_controls_1925_inc,
+        sae_controls_1925_incwork,
+        sae_controls_2644_inc,
+        sae_controls_2644_incwork,
+        sae_controls_4564_inc,
+        sae_controls_4564_incwork,
         sae_controls_65_inc,
         sae_controls_65_incwork
       )
@@ -255,8 +264,10 @@ if (exists("my_county_fip")) {
     pull(PUMA) %>% 
     unique()
   
-  acs1_elig019_sae    <- filter(acs1_elig019_sae,    PUMA %in% my_pumas)
-  acs1_elig2064_sae   <- filter(acs1_elig2064_sae,   PUMA %in% my_pumas)
+  acs1_elig018_sae    <- filter(acs1_elig018_sae,    PUMA %in% my_pumas)
+  acs1_elig1925_sae   <- filter(acs1_elig1925_sae,   PUMA %in% my_pumas)
+  acs1_elig2644_sae   <- filter(acs1_elig2644_sae,   PUMA %in% my_pumas)
+  acs1_elig4564_sae   <- filter(acs1_elig4564_sae,   PUMA %in% my_pumas)
   acs1_elig65plus_sae <- filter(acs1_elig65plus_sae, PUMA %in% my_pumas)
   
   acs5tract_sae <- filter(acs5tract_sae, COUNTYFIP == my_county_fip)
@@ -271,7 +282,9 @@ pop_by_age_base <-
   # filter(year == base_year) %>% 
   # Rename population values to avoid conflict with equivalent ACS5 counts, which
   # are for the prior 5 year period, not estimated for the base year as these are
-  select(GEOID, nAge0to19 = nAge0to19, nAge20to64, nAge65plus)
+  select(GEOID, 
+         nAge0to18, nAge19to25, nAge26to44, nAge45to64, nAge65plus)
+         #nAge0to19, nAge20to64, 
 
 # Merge to the ACS5-year data
 acs5tract_sae_counts <- 
@@ -284,8 +297,12 @@ acs5tract_sae_counts <-
   # /!\ These are placeholder values, which of course improperly assume that the
   # base-year estimates are perfectly precise. This must be replaced when possible.
   mutate(
-     nAge0to19_se = 0,
-    nAge20to64_se = 0,
+    #  nAge0to19_se = 0,
+    # nAge20to64_se = 0,
+    nAge0to18_se  = 0,
+    nAge19to25_se = 0,
+    nAge26to44_se = 0,
+    nAge45to64_se = 0,
     nAge64plus_se = 0)
 
 stopifnot(nrow(acs5tract_sae_counts) == nrow(acs5tract))
@@ -302,9 +319,13 @@ run_saes_byCtrls <- function(vul_vars, sae_input_data, my_controls) {
   
   pop_n_var <- 
     case_when(
-      identical(sae_input_data, acs1_elig019_sae)    ~ "nAge0to19",
-      identical(sae_input_data, acs1_elig2064_sae)   ~ "nAge20to64",
-      identical(sae_input_data, acs1_elig65plus_sae) ~ "nAge65plus",
+      # identical(sae_input_data, acs1_elig019_sae)    ~ "nAge0to19",
+      # identical(sae_input_data, acs1_elig2064_sae)   ~ "nAge20to64",
+      identical(sae_input_data, acs1_elig018_sae)    ~ "nAge0to18",
+      identical(sae_input_data, acs1_elig1925_sae)   ~ "nAge19to25",
+      identical(sae_input_data, acs1_elig2644_sae)   ~ "nAge26to44",
+      identical(sae_input_data, acs1_elig4564_sae)   ~ "nAge45to64",
+      identical(sae_input_data, acs1_elig65plus_sae) ~ "nAge65plus"
     )
   pop_n_se_var <- glue("{pop_n_var}_se")
    
@@ -335,8 +356,13 @@ if (parallelize_sae) {
   runlist <- 
     list(
       # sae_results_019_inc    = list(inc_cat_field, acs1_elig019_sae,    sae_controls_019_inc),
-      sae_results_2064_inc   = list(inc_cat_field, acs1_elig2064_sae,   sae_controls_2064_inc)
+      # sae_results_2064_inc   = list(inc_cat_field, acs1_elig2064_sae,   sae_controls_2064_inc)
       # sae_results_65_incwork = list(inc_cat_field, acs1_elig65plus_sae, sae_controls_65plus_inc),
+      sae_results_018_inc  = list(inc_cat_field, acs1_elig018_sae,    sae_controls_018_inc),
+      sae_results_1925_inc = list(inc_cat_field, acs1_elig1925_sae,   sae_controls_1925_inc),
+      sae_results_2644_inc = list(inc_cat_field, acs1_elig2644_sae,   sae_controls_2644_inc),
+      sae_results_4564_inc = list(inc_cat_field, acs1_elig4564_sae,   sae_controls_4564_inc),
+      sae_results_65_inc   = list(inc_cat_field, acs1_elig65plus_sae, sae_controls_65plus_inc)
       
       # sae_results_019_incwork    = list(incwork_cat_field, acs1_elig019_sae,    sae_controls_019_incwork),
       # sae_results_2064_incwork   = list(incwork_cat_field, acs1_elig2064_sae,   sae_controls_2064_incwork),
@@ -370,9 +396,15 @@ if (parallelize_sae) {
   
 } else {
   
-  sae_results_019_inc    = run_saes_byCtrls(inc_cat_field, acs1_elig019_sae,    sae_controls_019_inc)
-  sae_results_2064_inc   = run_saes_byCtrls(inc_cat_field, acs1_elig2064_sae,   sae_controls_2064_inc)
-  # sae_results_incwork_65 = run_saes_byCtrls(inc_cat_field, acs1_elig65plus_sae, sae_controls_65plus_inc)
+  sae_results_018_inc  = run_saes_byCtrls(inc_cat_field, acs1_elig018_sae,    sae_controls_018_inc)
+  sae_results_1925_inc = run_saes_byCtrls(inc_cat_field, acs1_elig1925_sae,   sae_controls_1925_inc)
+  sae_results_2644_inc = run_saes_byCtrls(inc_cat_field, acs1_elig2644_sae,   sae_controls_2644_inc)
+  sae_results_4564_inc = run_saes_byCtrls(inc_cat_field, acs1_elig4564_sae,   sae_controls_4564_inc)
+  sae_results_65_inc   = run_saes_byCtrls(inc_cat_field, acs1_elig65plus_sae, sae_controls_65plus_inc)
+  
+  # sae_results_019_inc  = run_saes_byCtrls(inc_cat_field, acs1_elig019_sae,    sae_controls_019_inc)
+  # sae_results_2064_inc = run_saes_byCtrls(inc_cat_field, acs1_elig2064_sae,   sae_controls_2064_inc)
+  # sae_results_65_inc   = run_saes_byCtrls(inc_cat_field, acs1_elig65plus_sae, sae_controls_65plus_inc)
   
   # sae_results_019_incwork  = run_saes_byCtrls(incwork_cat_field, acs1_elig019_sae,    sae_controls_019_incwork)
   # sae_results_2064_incwork = run_saes_byCtrls(incwork_cat_field, acs1_elig2064_sae,   sae_controls_2064_incwork)
@@ -410,8 +442,6 @@ if (FALSE) {
   ) 
 }
 ```
-
-
 
 
 #### Examine the Estimated Composition of Tracts
@@ -469,9 +499,10 @@ plot_sae_comp_by_tract <- function(sae_est, base_cat, title) {
 #   )
 
 plot_sae_comp_by_tract(
-  sae_results_2064_inc$sae_out,   
+  sae_results_2544_inc$sae_out,   
   base_cat = incpov_ref_value, 
-  title = "Base Income Cat Composition by Tract -- Ages 20-64")
+  title = "Base Income Cat Composition by Tract -- Ages 25-44"
+)
 
 # plot_sae_comp_by_tract(
 #   sae_controls_019_inc$sae_out,   
@@ -493,17 +524,17 @@ plot_sae_comp_by_tract(
 #     print()
 # }
 
-sae_results_2064_inc[["agg_comp_fh"]]$agg_comp_plot +
+sae_results_2544_inc[["agg_comp_fh"]]$agg_comp_plot +
   labs(
     title = "PUMA-level SAE Estimates vs ACS1 Counts",
-    subtitle = "Inc-to-Pov, Ages 20-64, FH Estimates",
+    subtitle = "Inc-to-Pov, Ages 25-44, FH Estimates",
     x = "Observed ACS 1-year Counts"
   ) 
 
-sae_results_2064_inc[["agg_comp_model"]]$agg_comp_plot +
+sae_results_2544_inc[["agg_comp_model"]]$agg_comp_plot +
   labs(
     title = "PUMA-level SAE Estimates vs ACS1 Counts",
-    subtitle = "Inc-to-Pov, Ages 20-64, Model Estimates",
+    subtitle = "Inc-to-Pov, Ages 25-44, Model Estimates",
     x = "Observed ACS 1-year Counts"
   ) 
 
@@ -528,8 +559,11 @@ sae_results_2064_inc[["agg_comp_model"]]$agg_comp_plot +
 ```{r compare correlations between puma-level observed and predicted values - fay herriot, eval = developer_mode}
 r3 <- function(x) round(x, 3)
 cbind(
-  sae_results_019_inc[["agg_comp_fh"]]$agg_comp_cor        %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
-  sae_results_2064_inc[["agg_comp_fh"]]$agg_comp_cor       %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64)
+  sae_results_018_inc[["agg_comp_fh"]]$agg_comp_cor  %>% mutate(Age0to18  = r3(V1)) %>% select(-V1),
+  sae_results_1925_inc[["agg_comp_fh"]]$agg_comp_cor %>% mutate(Age19to25 = r3(V1)) %>% select(Age19to25),
+  sae_results_2644_inc[["agg_comp_fh"]]$agg_comp_cor %>% mutate(Age26to44 = r3(V1)) %>% select(Age26to44),
+  sae_results_4564_inc[["agg_comp_fh"]]$agg_comp_cor %>% mutate(Age45to64 = r3(V1)) %>% select(Age45to64),
+  sae_results_65_inc[["agg_comp_fh"]]$agg_comp_cor   %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus)
   # sae_results_65plus_inc[["agg_comp_fh"]]$agg_comp_cor     %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
   # sae_results_019_incwork[["agg_comp_fh"]]$agg_comp_cor    %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
   # sae_results_2064_incwork[["agg_comp_fh"]]$agg_comp_cor   %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64),
@@ -540,8 +574,11 @@ cbind(
 
 ```{r compare correlations between puma-level observed and predicted values - model, eval = developer_mode}
 cbind(
-  sae_results_019_inc[["agg_comp_model"]]$agg_comp_cor        %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
-  sae_results_2064_inc[["agg_comp_model"]]$agg_comp_cor       %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64)
+  sae_results_018_inc[["agg_comp_model"]]$agg_comp_cor  %>% mutate(Age0to18  = r3(V1)) %>% select(-V1),
+  sae_results_1925_inc[["agg_comp_model"]]$agg_comp_cor %>% mutate(Age19to25 = r3(V1)) %>% select(Age19to25),
+  sae_results_2644_inc[["agg_comp_model"]]$agg_comp_cor %>% mutate(Age26to44 = r3(V1)) %>% select(Age26to44),
+  sae_results_4564_inc[["agg_comp_model"]]$agg_comp_cor %>% mutate(Age45to64 = r3(V1)) %>% select(Age45to64),
+  sae_results_65_inc[["agg_comp_model"]]$agg_comp_cor   %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus)
   # sae_results_65plus_inc[["agg_comp_model"]]$agg_comp_cor     %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
   # sae_results_019_incwork[["agg_comp_model"]]$agg_comp_cor    %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
   # sae_results_2064_incwork[["agg_comp_model"]]$agg_comp_cor   %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64),
@@ -700,28 +737,28 @@ acs5_compression_measure <- "Observed ACS 5-year Inc-to-Pov <130% FPL"
 sae_measure_label <- "SAE Estimate of Inc-to-Pov < 130% FPL"
 
 compare_sae_lt125fpl(
-  sae_results_019_inc$sae_out,
+  sae_results_018_inc$sae_out,
   title = diagnostic_note,
-  xlab = glue("{acs5_compression_measure}, Ages 0-19"),
-  ylab = glue("{sae_measure_label}, Age 0-19")
+  xlab = glue("{acs5_compression_measure}, Age 0-17"),
+  ylab = glue("{sae_measure_label}, Age 0-18")
 ) +
   theme_minimal()
 
 compare_sae_lt125fpl(
-  sae_results_2064_inc$sae_out,
+  sae_results_2544_inc$sae_out,
   title = diagnostic_note,
-  xlab = glue("{acs5_compression_measure}, Ages 20-64"),
-  ylab = glue("{sae_measure_label}, Ages 20-64")
+  xlab = glue("{acs5_compression_measure}, Age 18-64"),
+  ylab = glue("{sae_measure_label}, Ages 25-44")
 ) +
   theme_minimal()
 
-# compare_sae_lt125fpl(
-#   sae_results_65plus_inc$sae_out,
-#   title = diagnostic_note,
-#   xlab = glue("{acs5_compression_measure}, Ages 65+"),
-#   ylab = glue("{sae_measure_label}, Ages 65+")
-# ) +
-#   theme_minimal()
+compare_sae_lt125fpl(
+  sae_results_65plus_inc$sae_out,
+  title = diagnostic_note,
+  xlab = glue("{acs5_compression_measure}, Ages 65+"),
+  ylab = glue("{sae_measure_label}, Ages 65+")
+) +
+  theme_minimal()
 
 ```
 
@@ -814,14 +851,22 @@ make_acs5_equiv <- function(sae_ests, sae_age, only_hh_with_kids, verbose = FALS
   # age for subsetting
   acs5_ages <- 
     case_when(
-      sae_age == "019"    ~ "Age0to17",
-      sae_age == "2064"   ~ "Age18to64",
+      # sae_age == "019"    ~ "Age0to17",
+      # sae_age == "2064"   ~ "Age18to64",
+      sae_age == "018"    ~ "Age0to17",
+      sae_age == "1925"   ~ "Age18to64",
+      sae_age == "2644"   ~ "Age18to64",
+      sae_age == "4564"   ~ "Age18to64",
       sae_age == "65plus" ~ "Age65plus"
     )
   acs1_ages <- 
     case_when(
-      sae_age == "019"  ~ c( 0, 19),
-      sae_age == "2064" ~ c(20, 64),
+      # sae_age == "019"  ~ c( 0, 19),
+      # sae_age == "2064" ~ c(20, 64),
+      sae_age == "018"  ~ c( 0, 18),
+      sae_age == "1925" ~ c(19, 25),
+      sae_age == "2644" ~ c(26, 44),
+      sae_age == "4564" ~ c(45, 64),
       sae_age == "65"   ~ c(65, NA)
     )
   
@@ -1217,6 +1262,10 @@ redis_sae <- function(sae_to_redis, sae_age, only_hh_with_kids) {
       "612"  ~ "6to12",
       "019"  ~ "0to19", 
       "2064" ~ "20to64",
+      "018"  ~ "0to18",
+      "1925" ~ "19to25",
+      "2644" ~ "26to44",
+      "4564" ~ "45to64",
       "65"   ~ "65plus"
     )
   # acs_age <- 

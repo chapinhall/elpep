@@ -129,31 +129,44 @@ if (FALSE) {
 }
 
 # Group ages according to custom age partition
-age_right_cuts <- c(0, 4, 8, 15, 18, 25, 34, 44, 54, 64, Inf)
-acs5_pop_by_age_realigned <- 
+
+cut_custom_ages <- function(my_cuts) {
   acs5_pop_by_age_split %>% 
-  mutate(
-    age_group = 
-      cut(
-        age, 
-        breaks = age_right_cuts, 
-        include.lowest = TRUE
-      ) %>% 
-      as.character(),
-    lb = str_replace(age_group, ".(\\d+).+", "\\1"),
-    ub = str_replace(age_group, ".+,(\\d+).", "\\1"),
-    lb = lb %>% as.numeric() + 1*str_detect(age_group, "^\\("),
-    ub = ub %>% as.numeric() %>% replace_na(99),
-    age_group = glue("Age{lb}to{ub}") %>% str_replace("to99", "plus")
-  ) %>% 
-  rename(
-    age_old = age,
-    age     = age_group
+    mutate(
+      age_group = 
+        cut(
+          age, 
+          breaks = my_cuts, 
+          include.lowest = TRUE
+        ) %>% 
+        as.character(),
+      lb = str_replace(age_group, ".(\\d+).+", "\\1"),
+      ub = str_replace(age_group, ".+,(\\d+).", "\\1"),
+      lb = lb %>% as.numeric() + 1*str_detect(age_group, "^\\("),
+      ub = ub %>% as.numeric() %>% replace_na(999),
+      age_group = glue("Age{lb}to{ub}") %>% str_replace("to999", "plus")
+    ) %>% 
+    rename(
+      age_old = age,
+      age     = age_group
+    ) 
+}
+
+# Cut data for final population reporting
+acs5_pop_by_age_cut_for_output <- 
+  cut_custom_ages(
+    my_cuts = c(0, 4, 8, 15, 18, 25, 34, 44, 54, 64, Inf)
   )
+
+# Cut data to align with SAE specifications
+acs5_pop_by_age_cut_for_sae <- 
+  cut_custom_ages(
+    my_cuts = c(0, 18, 25, 44, 64, Inf)
+  ) 
 
 # Check assignment
 if (FALSE) {
-  acs5_pop_by_age_realigned %>% 
+  acs5_pop_by_age_cut_for_output %>% 
     select(age_old, age) %>% 
     unique() %>% 
     arrange(age) %>% 
@@ -161,42 +174,44 @@ if (FALSE) {
 }
 
 # Sum to desired partition
-acs5_pop_by_age_custom <- 
-  acs5_pop_by_age_realigned %>% 
-  construct_fields(
-    numerator = "age"
-  )
-
-acs5_pop_by_age_custom_long <- 
-  acs5_pop_by_age_realigned %>% 
-  construct_fields(
-    numerator = "age",
-    wide = FALSE
-  )
-
+acs5_pop_by_age_output <- acs5_pop_by_age_cut_for_output %>% construct_fields(numerator = "age")
+acs5_pop_by_age_sae    <- acs5_pop_by_age_cut_for_sae %>% construct_fields(numerator = "age")
 
 # Examine correspondence with previous calculations
 if (FALSE) {
-  rbind(
-    acs5_pop_by_age_custom_long %>% filter(age == "Age0to4", GEOID == GEOID[1]),
-    acs5_pop_by_age_long        %>% filter(age == "Age0to5", GEOID == acs5_pop_by_age_custom$GEOID[1])
+  merge(
+    acs5_pop_by_age_output %>% select(matches("GEOID|^(r|n|w)Age0to4")),
+    acs5_pop_by_age_wide   %>% select(matches("GEOID|^(r|n|w)Age0to5")),
+    by = "GEOID"
   )
+  
 }
 
 ```
 
 ```{r combine calculations by age and custom categories and remove redundancy}
-custom_cols <- cn(acs5_pop_by_age_custom)
-non_dup_cols <- custom_cols[!custom_cols %in% cn(acs5_pop_by_age_wide)]
+merge_nodup <- function(my_x, my_y, my_by) {
+  y_cols <- cn(my_y)
+  non_dup_cols <- y_cols[!y_cols %in% cn(my_x)]
+  
+  merge(
+    my_x,
+    my_y %>% select(c(my_by, non_dup_cols)),
+    by = my_by
+  )
+}
 
 acs5_pop_by_age_combo <- 
   acs5_pop_by_age_wide %>% 
-  merge(
-    acs5_pop_by_age_custom %>% 
-      select(all_of(c("GEOID", non_dup_cols))),
-    by = "GEOID"
+  merge_nodup(
+    acs5_pop_by_age_output, 
+    my_by = "GEOID"
+  ) %>% 
+  merge_nodup(
+    acs5_pop_by_age_sae, 
+    my_by = "GEOID"
   )
-
+  
 ```
 
 

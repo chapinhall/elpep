@@ -184,18 +184,25 @@ acs1_recoded <-
     #    aligned with final reporting categories
     cAge = 
       case_when(
-        AGEP %in%  0:5  ~ "Age0to5",
-        AGEP %in%  6:18 ~ "Age6to18",
+        # AGEP %in%  0:5  ~ "Age0to5",
+        # AGEP %in%  6:18 ~ "Age6to18",
+        AGEP %in%  0:18 ~ "Age0to18",
         # AGEP %in% 16:18 ~ "Age16to18",
         AGEP %in% 19:25 ~ "Age19to25",
-        AGEP %in% 25:44 ~ "Age25to44",
-        AGEP %in% 45:64 ~ "Age25to44",
+        AGEP %in% 26:44 ~ "Age26to44",
+        AGEP %in% 45:64 ~ "Age45to64",
         # AGEP %in%  0:19 ~ "Age0to19",
         # AGEP %in% 20:64 ~ "Age20to64",
         AGEP >= 65      ~ "Age65plus"
-      ),
+      ) %>% 
+      sort_by_char_nums(),
+    
+    # Note -- a range of different flags is necessary in different contexts,
+    # e.g. the age of dependents for ABAWD requirements, or own age with
+    # respect to age-based rules around income eligibility
     bAge0to5   = 1*between(AGEP,  0,  5),
     bAge6to14  = 1*between(AGEP,  6, 14),
+    bAge15to18 = 1*between(AGEP, 15, 18),
     bAge15to19 = 1*between(AGEP, 15, 19),
     bAge0to19  = 1*between(AGEP,  0, 19),
     bAge20to64 = 1*between(AGEP, 20, 64),
@@ -216,7 +223,8 @@ acs1_recoded <-
       case_when(
         RAC2P == 1000 ~ "white", 
         RAC2P == 2000 ~ "black", 
-        TRUE ~ "other_multiple"),
+        TRUE ~ "other_multiple"
+      ),
     bHispanic = 1*(HISP != 1) ,
     
     # Recode school enrollment status
@@ -301,7 +309,7 @@ acs1_adults <-
     fam_size = n(),
     bAge0to5_present   = maxNA(bAge0to5),
     bAge6to14_present  = maxNA(bAge6to14),
-    bAge15to18_present = maxNA(bAge15to19),
+    bAge15to18_present = maxNA(bAge15to18),
     bAge0to14_present  = maxNA(bAge0to5 | bAge6to14),
     bAge0to18_present  = maxNA(bAge0to5 | bAge6to14 | bAge15to18)
   ) %>% 
@@ -386,11 +394,11 @@ acs1_elig <-
     cSpousePresent  = ifelse(bSpousePresent == 1, "SpousePresent", "NoSpousePresent"),
     
     #work_spouse_status    = paste_(cWorkElig, cSpousePresent),
-    cWork_incpov_status130 = paste_(cWorkElig, cFam_incpov_ratio_cat_with130),
+    cWork_incpov_status130 = paste_(cWorkElig, cFam_incpov_ratio_cat_with130) %>% sort_by_char_nums(),
     #cWork_incpov_status100 = paste_(cWorkElig, cFam_incpov_ratio_cat_by100),
     #cWork_incpov_statushs  = paste_(cWorkElig, cFam_incpov_ratio_cat_hs_prog),
     
-    cWorkThresh_incpov_status130 = paste_(cWorkEligThresh, cFam_incpov_ratio_cat_with130),
+    cWorkThresh_incpov_status130 = paste_(cWorkEligThresh, cFam_incpov_ratio_cat_with130) %>% sort_by_char_nums(),
     #cWorkThresh_incpov_status100 = paste_(cWorkEligThresh, cFam_incpov_ratio_cat_by100),
     #cWorkThresh_incpov_statushs  = paste_(cWorkEligThresh, cFam_incpov_ratio_cat_hs_prog),
   
