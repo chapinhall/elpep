@@ -15,6 +15,45 @@ load(file = glue("{output_path}Now-cast counts at the tract level, pre-disaggreg
 ```
 
 
+### Apply Shares to Disaggregated Age Groups
+
+```{r}
+# Create mapping of final age groups of interest to ages from specifications
+pop_age_mapped <- 
+  pop_age_t_calib %>% 
+  mutate(
+    age = 
+      case_when(
+        str_detect(
+          age_var, 
+          "Age(0to4|5to8|9to15|16to18)" ~ "Age0to18",
+          "Age19to25"                   ~ "Age9to25",
+          "Age(26to34|35to44)"          ~ "Age26to44",
+          "Age(45to54|55to64)"          ~ "Age45to64",
+          "Age65plus"                   ~ "Age65plus",
+        )
+      )
+  ) %>% 
+  mutate(
+    pop_count    = calib,
+    pop_count_se = 0 # calib_se
+  )
+
+nowcast_parallel_counts <- 
+  nowcast_parallel %>% 
+  merge(
+    pop_age_mapped,
+    by = c("GEOID", "age"),
+    all.x = TRUE
+  ) %>% 
+  mutate(
+    count    = share*pop_count,
+    count_se = se_product(share, pop_count, share_se, pop_count_se)
+  )
+  
+```
+
+
 
 ### Aggregate Estimates to Larger Geographies
 
