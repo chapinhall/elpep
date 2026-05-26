@@ -26,7 +26,7 @@ work_hrs_threshold <- 20
 ```{r read in acs1 data and documentation}
 my_pums <- 
   pums_variables %>% 
-  filter(year   == {base_year},
+  filter(year   == base_year,
          survey == "acs1") %>% 
   select(var_code, var_label, level, val_min, val_max, val_label)
 
@@ -275,7 +275,7 @@ acs1_recoded <-
         6 ~ "Not in labor force"
       ),
     bEmpl_elig = 1*str_detect(cEmpl, "Employed|Armed Forces"),
-    bEmpl_metHrsThres_elig = 1*(bEmpl_elig & (usual_hrs_worked >= work_hrs_threshold)),
+    bEmplHrs_elig = 1*(bEmpl_elig & (usual_hrs_worked >= work_hrs_threshold)),
     
     # Categorize industry of work
     cIndustry = bin_industry(INDP), # bin_industry() is defined in the `helper` script
@@ -300,6 +300,74 @@ if (FALSE) {
 }
 ```
 
+```{r examine SSI and disability by age}
+tabyl(acs1_recoded, bDisab, bHasSsi)
+
+acs1_recoded %>% 
+  summarize(
+    .by = AGEP,
+    rDisab  = meanNA(bDisab),
+    rHasSsi = meanNA(bHasSsi),
+    rBoth   = meanNA(bDisab & bHasSsi)
+  ) %>% 
+  pivot_longer(
+    cols = -AGEP
+  ) %>% 
+  ggplot() + 
+  aes(
+    x = AGEP,
+    y = value,
+    color = name
+  ) +
+  geom_line() +
+  theme_minimal()
+
+```
+
+```{r build work status of spouse (if present)}
+acs1_recoded <- 
+  acs1_recoded %>% 
+  mutate(
+    .by = SERIALNO,
+    sploc = 
+      case_when(
+        cRel == "Head"   ~ match("Spouse", cRel),
+        cRel == "Spouse" ~ match("Head",   cRel),
+        TRUE ~ NA
+      ),
+    bEmpl_elig_sp    = bEmpl_elig[sploc],
+    bEmplHrs_elig_sp = bEmplHrs_elig[sploc]
+  )
+
+if (FALSE) {
+  acs1_recoded %>% 
+    select(
+      SERIALNO, SPORDER, RELSHIPP, bEmpl_elig, bEmpl_elig_sp, bEmplHrs_elig, bEmplHrs_elig_sp
+    ) %>% 
+    View()
+}
+
+```
+
+
+```{r examine presence of head of household and spouse}
+
+if (FALSE) {
+  acs1_elig %>% 
+    summarize(
+      .by = SERIALNO,
+      nHoh     = sum(RELSHIPP == 20),
+      nPartner = sum(RELSHIPP %in% 21:24),
+      nMarrSpouse = sum(RELSHIPP %in% c(21, 23)),
+      nUnmarrSpouse = sum(RELSHIPP %in% c(22, 24))
+    ) %>% 
+    summarize(
+      .by = c(nHoh, nPartner, nMarrSpouse, nUnmarrSpouse),
+      n = n()
+    ) 
+}
+
+```
 
 ```{r summarize household-level values}
 acs1_adults <-
@@ -326,8 +394,8 @@ acs1_adults <-
     .by = c(YEAR, SERIALNO, fam_size),
     bSpousePresent = maxNA(cRel == "Spouse"),
     bAdults_all_work_sch         = minNA(bInSch | bEmpl_elig),
-    bAdults_all_workThresh_sch   = minNA(bInSch | bEmpl_metHrsThres_elig)
-  ) 
+    bAdults_all_workThresh_sch   = minNA(bInSch | bEmplHrs_elig)
+  )
 
 ```
 
@@ -475,7 +543,7 @@ if (FALSE) {
       SERIALNO, SPORDER, AGEP, cAge, cRel, cEduc, 
       POVPIP, fam_incpov_ratio, 
       cEmpl, cSchEnr, usual_hrs_worked, bEmpl_elig, 
-      bEmpl_metHrsThres_elig, cFam_incpov_ratio_cat_with130, cWorkThresh_incpov_status130
+      bEmplHrs_elig, cFam_incpov_ratio_cat_with130, cWorkThresh_incpov_status130
     )
   
   View(acs1_elig_keymeasures, "Check key ACS1 constructions")
