@@ -24,20 +24,23 @@ pop_age_mapped <-
   mutate(
     age = 
       case_when(
-        str_detect(
-          age_var, 
-          "Age(0to4|5to8|9to15|16to18)" ~ "Age0to18",
-          "Age19to25"                   ~ "Age9to25",
-          "Age(26to34|35to44)"          ~ "Age26to44",
-          "Age(45to54|55to64)"          ~ "Age45to64",
-          "Age65plus"                   ~ "Age65plus",
-        )
+        age_var %like% "Age(0to4|5to8|9to15|16to18)" ~ "Age0to18",
+        age_var %like% "Age19to25"                   ~ "Age19to25",
+        age_var %like% "Age(26to34|35to44)"          ~ "Age26to44",
+        age_var %like% "Age(45to54|55to64)"          ~ "Age45to64"
+        #age_var %like% "Age65plus"                   ~ "Age65plus"
       )
+  ) %>% 
+  # Remove un-mapped rows (which may represent other population cutpoints)
+  filter(
+    !is.na(age)
   ) %>% 
   mutate(
     pop_count    = calib,
     pop_count_se = 0 # calib_se
   )
+
+stopifnot(all(pop_age_mapped$age %in% nowcast_parallel$age))
 
 nowcast_parallel_counts <- 
   nowcast_parallel %>% 
@@ -49,7 +52,9 @@ nowcast_parallel_counts <-
   mutate(
     count    = share*pop_count,
     count_se = se_product(share, pop_count, share_se, pop_count_se)
-  )
+  ) %>% 
+  select(-age) %>% 
+  rename(age = age_var)
   
 ```
 
