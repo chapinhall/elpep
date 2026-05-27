@@ -327,19 +327,34 @@ write_agg_output(
 
 #### Compare Estimates At Different Levels of Aggregation
 
-```{r examine the dispersion of CCDF eligibility for potentially multiple income thresholds}
+```{r examine the dispersion of program eligibility for potentially multiple income thresholds}
 
 nowcast_agg_zip %>% 
-  .[outcome_var %like% "ccdf_elig" & pd == "nowcast"] %>% 
-  ggplot(aes(x = share,
-             color = str_replace(outcome_var, ".+_(\\d+)$", "\\1%"))) +
+  filter(
+    outcome_var %like% "^bProg",
+    pd == "nowcast"
+  ) %>% 
+  ggplot() +
+  aes(
+    x = share,
+    color = str_replace(outcome_var, ".+_(\\d+)$", "\\1%")) +
   geom_density() +
-  facet_wrap(~ age) +
-  scale_x_continuous(labels = percent) +
-  scale_color_discrete(name = "Income Eligibility Threshold") +
-  labs(x = "% CCDF Eligibility") +
+  facet_wrap(
+    ~ age
+  ) +
+  scale_x_continuous(
+    labels = percent
+  ) +
+  scale_color_discrete(
+    name = "Income Eligibility Threshold"
+  ) +
+  labs(
+    x = "% Prog Eligibility"
+  ) +
   theme_minimal() +
-  theme(legend.position = "bottom")
+  theme(
+    legend.position = "bottom"
+  )
 ```
 
 
@@ -350,652 +365,684 @@ if (exists("custom_income_thresh")) {
   
   plot_data <- 
     nowcast_agg_zip %>% 
-    .[outcome_var %like% "ccdf_elig" & 
-        pd == "nowcast" & 
-        cps_base_recency == "most_recent" 
-      ] %>% 
-    .[j = `:=`(order = min(share),
-               inc_thresh = 
-                 outcome_var %>% 
-                 str_replace(".+_(\\d+)$", "\\1%") %>% 
-                 sort_by_char_nums()),
-      by = .(ZCTA, age)]
+    filter(
+      outcome_var %like% "ccdf_elig",
+      pd == "nowcast",
+      cps_base_recency == "most_recent" 
+    ) %>% 
+    mutate(
+      .by = c(ZCTA, age),
+      
+      order = min(share),
+      inc_thresh = 
+        outcome_var %>% 
+        str_replace(".+_(\\d+)$", "\\1%") %>% 
+        sort_by_char_nums()
+    )
   
-  get_zcta_order <- function(z) plot_data[ZCTA == z, min(share)] 
+  get_zcta_order <- function(z) plot_data %>% filter(ZCTA == z) %>% pull(share) %>% min()
   
-  my_plot <- 
-    ggplot(plot_data,
-           aes(x = reorder(ZCTA, order),
-               y = share,
-               color = inc_thresh)) +
-    geom_point(alpha = 0.2) + 
+  my_plot <-
+    plot_data %>% 
+    ggplot() +
+    aes(
+      x = reorder(ZCTA, order),
+      y = share,
+      color = inc_thresh
+    ) +
+    geom_point(
+      alpha = 0.2
+    ) + 
     geom_line() +
-    facet_wrap(~ age) +
-    scale_y_continuous(labels = percent) +
-    scale_color_discrete(name = "Income Eligibility Threshold") +
-    labs(x = "ZCTAs, in order of lowest income threshold") +
-    theme(legend.position = "bottom",
-          axis.text.x = element_blank())
+    facet_wrap(
+      ~ age
+    ) +
+    scale_y_continuous(
+      labels = percent
+    ) +
+    scale_color_discrete(
+      name = "Income Eligibility Threshold"
+    ) +
+    labs(
+      x = "ZCTAs, in order of lowest income threshold"
+    ) +
+    theme(
+      legend.position = "bottom",
+      axis.text.x = element_blank()
+    )
   
   print(my_plot)
 }
 ```
 
 
-#### Map Levels and Differences
+<!-- #### Map Levels and Differences -->
 
-```{r generate static plots}
+<!-- ```{r generate static plots} -->
 
-date_range <- label_date_range(most_recent_months)
+<!-- date_range <- label_date_range(most_recent_months) -->
 
-static_map_val <- function(estimates,
-                           geo_level,
-                           geo_level_merge_field = geo_level,
-                           geo_level_desc = geo_level,
-                           outcome,
-                           field_desc,
-                           plot_stat, # can take values "nowcast" or "diff"
-                           map_title = NULL,
-                           file_tag = "",
-                           save_map = TRUE, 
-                           val_limits = NULL,
-                           show_legend = TRUE,
-                           fill_trans  = "identity") { # an alternative is "sqrt"
-  
-  ### Prepare estimates -------------------------------------------------------#
-  est_plot <- 
-    estimates %>% 
-    filter(outcome_var %like% outcome,
-           cps_base_recency == case_match(plot_stat,
-                                          "nowcast" ~ "most_recent",
-                                          "diff"    ~ "allbase")) %>% 
-    dplyr::select(-count, -count_se, -pop_count, -pop_count_se, -share_se, -cps_base_recency)
-  
-  est_wide <- 
-    est_plot %>% 
-    pivot_wider(names_from = pd,
-                values_from = share) %>% 
-    mutate(diff = nowcast - base,
-           Age = 
-             age %>% 
-             str_replace_all(".+(\\d+)to(\\d+)", "Age \\1-\\2") %>% 
-             str_replace_all("Age_(\\d+)", "Age \\1"))
-  
-  ### Join Geographic Data ----------------------------------------------------#
-  myShp <- get(glue("{str_to_lower(geo_level)}Shp"))
-  est_geo <- 
-    est_wide %>% 
-    merge(myShp,
-          by = geo_level_merge_field) %>% 
-    st_as_sf()
-  
-  ### Set plot options --------------------------------------------------------#
-  # See this reference for setting `option` for scale_fill_viridis_c():
-  #   https://ggplot2.tidyverse.org/reference/scale_viridis.html
-  # See this as a visual reference for viridis color maps:
-  #   https://cran.r-project.org/web/packages/viridis/vignettes/intro-to-viridis.html
-  color_opt <- ifelse(plot_stat == "nowcast", 
-                      "plasma",  # this is roughly yellow-red-purple
-                      "viridis") # this is roughly yellow-green-purple
-  
-  if (plot_stat == "nowcast") {
-    measure_label <- glue("Levels of {field_desc}")  
-  } else {
-    field_desc <- str_replace(field_desc, "\\(", glue("\\({base_year} - "))
-    measure_label <- glue("Pct Pt Diff in {field_desc}")  
-  }
-  
-  # Prep outcome description to work with filenaming
-  measure_label_out <- 
-    measure_label %>% 
-    str_replace("<", "Below") %>% 
-    str_replace("%", "pct")
-  
-  ### Generate Map Plot -------------------------------------------------------#
-  my_plot <- 
-    ggplot() +
-    geom_sf(data = est_geo,
-            aes_string(fill = plot_stat),
-            linewidth = 0.025,
-            color = "black")
-  
-  if (n_distinct(est_geo$Age) > 1) {
-    my_plot <- 
-      my_plot + 
-      facet_wrap(~Age)
-    title_age <- ""
-  } else {
-    title_age <- glue(", unique(est_geo$Age)")
-  }
-  
-  # Finish map
-  my_plot <-
-    my_plot + 
-    scale_fill_viridis_c(name = "",
-                         limits = val_limits, 
-                         option = color_opt,
-                         trans = fill_trans,
-                         labels = percent,
-                         alpha = .4) +
-    labs(title    = ifelse(!is.null(map_title), map_title, str_wrap(measure_label)),
-         subtitle = ifelse( is.null(map_title),        "", str_wrap(measure_label))) +
-    theme_void() 
-  
-  # Remove legend if not desired
-  if (!show_legend) {
-    my_plot <- 
-      my_plot +
-      theme(legend.position = "none")
-  }
-      
-  if (save_map) {
-    ggsave(plot = my_plot,
-           filename = glue("{output_path}Map of {measure_label_out} for {geo_level_desc}{file_tag}_{my_output_tag}.png"),
-           #width = 7,
-           height = 7,
-           units = "in")  
-  }
-  
-  return(my_plot)
-}
-```
+<!-- static_map_val <- function(estimates, -->
+<!--                            geo_level, -->
+<!--                            geo_level_merge_field = geo_level, -->
+<!--                            geo_level_desc = geo_level, -->
+<!--                            outcome, -->
+<!--                            field_desc, -->
+<!--                            plot_stat, # can take values "nowcast" or "diff" -->
+<!--                            map_title = NULL, -->
+<!--                            file_tag = "", -->
+<!--                            save_map = TRUE,  -->
+<!--                            val_limits = NULL, -->
+<!--                            show_legend = TRUE, -->
+<!--                            fill_trans  = "identity") { # an alternative is "sqrt" -->
 
+<!--   ### Prepare estimates -------------------------------------------------------# -->
+<!--   est_plot <-  -->
+<!--     estimates %>%  -->
+<!--     filter( -->
+<!--       outcome_var %like% outcome, -->
+<!--       cps_base_recency == case_match(plot_stat, -->
+<!--                                      "nowcast" ~ "most_recent", -->
+<!--                                      "diff"    ~ "allbase") -->
+<!--     ) %>%  -->
+<!--     select(-count, -count_se, -pop_count, -pop_count_se, -share_se, -cps_base_recency) -->
 
-```{r map to generate maps for both levels and differences}
-static_map_level_diff <- function(plot_stats = c("nowcast", "diff"),
-                                  ...) {
-  
-  for (ps in plot_stats) {
-    static_map_val(plot_stat = ps,
-                   ...)
-  }
-}
-```
+<!--   est_wide <-  -->
+<!--     est_plot %>%  -->
+<!--     pivot_wider( -->
+<!--       names_from = pd, -->
+<!--       values_from = share -->
+<!--     ) %>%  -->
+<!--     mutate( -->
+<!--       diff = nowcast - base, -->
+<!--       Age =  -->
+<!--         age %>%  -->
+<!--         str_replace_all(".+(\\d+)to(\\d+)", "Age \\1-\\2") %>%  -->
+<!--         str_replace_all("Age_(\\d+)", "Age \\1") -->
+<!--     ) -->
 
+<!--   ### Join Geographic Data ----------------------------------------------------# -->
+<!--   myShp <- get(glue("{str_to_lower(geo_level)}Shp")) -->
+<!--   est_geo <-  -->
+<!--     est_wide %>%  -->
+<!--     merge( -->
+<!--       myShp, -->
+<!--       by = geo_level_merge_field -->
+<!--     ) %>%  -->
+<!--     st_as_sf() -->
 
-```{r generate static plots of ccdf eligibility in levels and differences}
+<!--   ### Set plot options --------------------------------------------------------# -->
+<!--   # See this reference for setting `option` for scale_fill_viridis_c(): -->
+<!--   #   https://ggplot2.tidyverse.org/reference/scale_viridis.html -->
+<!--   # See this as a visual reference for viridis color maps: -->
+<!--   #   https://cran.r-project.org/web/packages/viridis/vignettes/intro-to-viridis.html -->
+<!--   color_opt <-  -->
+<!--     ifelse( -->
+<!--       plot_stat == "nowcast",  -->
+<!--       "plasma",  # this is roughly yellow-red-purple -->
+<!--       "viridis" -->
+<!--     ) # this is roughly yellow-green-purple -->
 
-for (out_var in c("ccdf", "le100", "le200")) {
-  
-  if (out_var == "ccdf") {
-    out_var_desc <- glue("{local_ccdf_name_short} - {local_ccdf_incratio_base}% {prog_income_thresh_label} ({date_range})")
-    out_var_name <- glue("ccdf_elig_incratio_{local_ccdf_incratio_base}")
-  } else if (out_var == "le100") {
-    out_var_desc <- glue("Head Start Eligibility ({date_range})")
-    out_var_name <- "incpov_le100_post_adj"
-  } else if (out_var == "le200") {
-    out_var_desc <- glue("Income <200% FPL ({date_range})")
-    out_var_name <- "incpov_le200_post_adj"
-  }
-  
-  static_map_level_diff(
-    estimates = nowcast_agg_zip %>% filter(age == age_agg_main),
-    geo_level = "ZCTA",
-    outcome = out_var_name,
-    field_desc = out_var_desc,
-    save_map = TRUE, 
-    #val_limits = c(0, 0.6),
-    show_legend = TRUE
-  )
-  
-  static_map_level_diff(
-    estimates = nowcast_agg_cty %>% filter(age == age_agg_main),
-    geo_level = "County",
-    outcome = out_var_name,
-    field_desc = out_var_desc,
-    save_map = TRUE, 
-    #val_limits = c(0, 0.6),
-    show_legend = TRUE
-  )
-  
-  static_map_level_diff(
-    estimates = nowcast_agg_sd %>% filter(age == age_agg_main),
-    geo_level = "school",
-    outcome = out_var_name,
-    field_desc = out_var_desc,
-    save_map = TRUE, 
-    #val_limits = c(0, 0.6),
-    show_legend = TRUE
-  )
-  
-  if (exists("my_aux_geo")) {
-    static_map_level_diff(
-      estimates = nowcast_agg_aux %>% filter(age == age_agg_main),
-      geo_level = "aux",
-      geo_level_merge_field = "aux_geo_label",
-      geo_level_desc = my_aux_geo_desc,
-      outcome = out_var_name,
-      field_desc = out_var_desc,
-      save_map = TRUE, 
-      #val_limits = c(0, 0.6),
-      show_legend = TRUE
-    ) 
-  }
-}
-```
+<!--   if (plot_stat == "nowcast") { -->
+<!--     measure_label <- glue("Levels of {field_desc}")   -->
+<!--   } else { -->
+<!--     field_desc <- str_replace(field_desc, "\\(", glue("\\({base_year} - ")) -->
+<!--     measure_label <- glue("Pct Pt Diff in {field_desc}")   -->
+<!--   } -->
+
+<!--   # Prep outcome description to work with filenaming -->
+<!--   measure_label_out <-  -->
+<!--     measure_label %>%  -->
+<!--     str_replace("<", "Below") %>%  -->
+<!--     str_replace("%", "pct") -->
+
+<!--   ### Generate Map Plot -------------------------------------------------------# -->
+<!--   my_plot <-  -->
+<!--     ggplot() + -->
+<!--     geom_sf( -->
+<!--       data = est_geo, -->
+<!--       aes_string(fill = plot_stat), -->
+<!--       linewidth = 0.025, -->
+<!--       color = "black" -->
+<!--     ) -->
+
+<!--   if (n_distinct(est_geo$Age) > 1) { -->
+<!--     my_plot <-  -->
+<!--       my_plot +  -->
+<!--       facet_wrap(~Age) -->
+<!--     title_age <- "" -->
+<!--   } else { -->
+<!--     title_age <- glue(", unique(est_geo$Age)") -->
+<!--   } -->
+
+<!--   # Finish map -->
+<!--   my_plot <- -->
+<!--     my_plot +  -->
+<!--     scale_fill_viridis_c( -->
+<!--       name = "", -->
+<!--       limits = val_limits,  -->
+<!--       option = color_opt, -->
+<!--       trans = fill_trans, -->
+<!--       labels = percent, -->
+<!--       alpha = .4 -->
+<!--     ) + -->
+<!--     labs( -->
+<!--       title    = ifelse(!is.null(map_title), map_title, str_wrap(measure_label)), -->
+<!--       subtitle = ifelse( is.null(map_title),        "", str_wrap(measure_label)) -->
+<!--     ) + -->
+<!--     theme_void()  -->
+
+<!--   # Remove legend if not desired -->
+<!--   if (!show_legend) { -->
+<!--     my_plot <-  -->
+<!--       my_plot + -->
+<!--       theme( -->
+<!--         legend.position = "none" -->
+<!--       ) -->
+<!--   } -->
+
+<!--   if (save_map) { -->
+<!--     ggsave( -->
+<!--       plot = my_plot, -->
+<!--       filename = glue("{output_path}Map of {measure_label_out} for {geo_level_desc}{file_tag}_{my_output_tag}.png"), -->
+<!--       #width = 7, -->
+<!--       height = 7, -->
+<!--       units = "in" -->
+<!--     )   -->
+<!--   } -->
+
+<!--   return(my_plot) -->
+<!-- } -->
+<!-- ``` -->
 
 
-```{r generate tract-level maps within indicated geographies if specified for ccdf sensitivities}
+<!-- ```{r map to generate maps for both levels and differences} -->
+<!-- static_map_level_diff <- function(plot_stats = c("nowcast", "diff"), -->
+<!--                                   ...) { -->
 
-if (exists("map_geos")) {
-  lMap_out <- list(maps_by_geo = list(),
-                   maps_by_inc = list())
-  
-  ccdf_outs <- 
-    nowcast_agg_tract$outcome_var %>% 
-    str_subset("ccdf") %>% 
-    sort_by_char_nums() %>% 
-    levels()
-  
-  map_geo_field <- 
-    case_match(map_geo_level,
-               "tract" ~ "GEOID",
-               "county" ~ "County",
-               "school" ~ "school")
-  
-  # Loop across ages
-  for (a in age_agg_main) { 
-    ests_a <- 
-      nowcast_agg_tract %>% 
-      filter(age == a,
-             outcome_var %in% ccdf_outs)
-    
-    age_desc <- 
-      a %>% 
-      str_replace("age_(\\d+)to(\\d+)", "Age \\1-\\2") %>% 
-      str_replace("age_(\\d+)", "Age \\1")
-    
-    share_range <- range(ests_a$share, na.rm = TRUE)
-    
-    # Loop across geographies
-    
-    for (g in map_geos) {
-      
-      # Identify tracts associated with the indicated geography
-      if (str_to_lower(map_geo_level) == "county") {
-        xwalk_g <- filter(geo_crosswalk, County == g)
-      } else if (str_to_lower(map_geo_level) == "school") {
-        xwalk_g <- filter(geo_crosswalk_sd, school == g)
-      } else if (str_to_lower(map_geo_level) == "aux") {
-        xwalk_g <- filter(geo_crosswalk_aux, get(my_aux_geo_field) == g)
-      }
-      
-      map_tracts <- unique(xwalk_g$GEOID)
-      ests_ag <- filter(ests_a, GEOID %in% map_tracts)
-      
-      for (o in ccdf_outs) {
-        inc_thresh <- str_extract(o, "\\d+$")
-        
-        my_plot_ranged <- 
-          static_map_val(
-            estimates = ests_ag,
-            geo_level = "tract",
-            geo_level_merge_field = "GEOID",
-            outcome = o,
-            field_desc = 
-              glue("{local_ccdf_name_short} Eligibility - ",
-                   "{inc_thresh}% {prog_income_thresh_label}, {age_desc} ",
-                   "({date_range})"),
-            val_limits = share_range,
-            show_legend = TRUE,
-            map_title = g,
-            plot_stat = "nowcast",
-            file_tag = glue(" - {g}"),
-            save_map = FALSE
-          )
-        
-        # lMap_out[["maps_by_inc"]] <- 
-        #   append(lMap_out[["maps_by_inc"]],
-        #          my_plot_ranged)
-        lMap_out[["maps_by_inc"]][[length(lMap_out[["maps_by_inc"]]) + 1]] <- 
-          my_plot_ranged
-        
-        # If it's the base CCDF income eligibility ratio, build a map with its own
-        # scale to focus on geographic contrasts (rather than comparison of rates
-        # across other income thresholds)
-        if (str_detect(o, as.character(local_ccdf_incratio_base))) {
-          my_plot_unranged <- 
-            static_map_val(
-              estimates = ests_ag,
-              geo_level = "tract",
-              geo_level_merge_field = "GEOID",
-              outcome = o,
-              field_desc = 
-                glue("{local_ccdf_name_short} Eligibility - ",
-                     "{inc_thresh}% {prog_income_thresh_label}, {age_desc} ",
-                     "({date_range})"),
-              val_limits = NULL,
-              show_legend = TRUE,
-              map_title = g,
-              plot_stat = "nowcast",
-              file_tag = glue(" - {g} - geographic contrast"),
-              save_map = FALSE
-            )
-          
-          lMap_out[["maps_by_geo"]][[length(lMap_out[["maps_by_geo"]]) + 1]] <- 
-            my_plot_unranged
-        }
-      }
-    }
-  } 
-}
-```
-
-```{r remove portions of shapes that are over lake michigan, eval = str_detect(my_output_tag, "CECIDS|IECAM")}
-
-#install.packages(c("rnaturalearth", "rnaturalearthdata"))
-library(rnaturalearth)
-library(rnaturalearthdata)
-
-target_crs <- st_crs(tractShp)
-
-lakes <- 
-  rnaturalearth::ne_download(
-    scale = "large",
-    type = "lakes",
-    category = "physical",
-    returnclass = "sf") %>% 
-  st_transform(target_crs)
-
-lake_michigan <- lakes %>% filter(name == "Lake Michigan")
-
-# Function to subtract the lake from tracts that touch Chicago (or from all tracts) ---
-subtract_lake <- function(my_shp) {
-  
-  my_shp <- st_transform(my_shp, target_crs)
-  
-  # This subsets to only Chicago intersections, temporarily
-  # idx_touch_chi <- lengths(st_intersects(my_shp, chi_map)) > 0
-  # my_shp_chi <- my_shp[idx_touch_chi, ]
-  
-  tracts_no_lake <- st_difference(my_shp, st_union(lake_michigan))
-  tracts_no_lake <- tracts_no_lake[!st_is_empty(tracts_no_lake), ]
-    # Drop any empty geometries (purely water tracts become empty after subtraction)
-  
-  #rbind(my_shp[!idx_touch_chi, ], tracts_no_lake)  
-  return(tracts_no_lake)
-}
-
-tractShp_nolake <- subtract_lake(tractShp)
-pumaShp_nolake  <- subtract_lake(pumaShp)
-auxShp_nolake   <- subtract_lake(auxShp)
-```
-
-```{r Function to build the bare bones of the 'story' maps}
-
-story_map <- 
-  function(
-    shpEsts, 
-    fill_var,
-    val_limits, 
-    bbox, 
-    save_tag, 
-    color_opt = "viridis", 
-    save_map = TRUE, 
-    add_hp = FALSE) {
-    
-  base <- 
-    shpEsts %>% 
-    ggplot() +
-    #annotation_map_tile(type = "cartolight", zoomin = -1, alpha = 0.7) +
-    geom_sf(
-      aes(fill = get(fill_var)),
-      linewidth = 0.025,
-      color = "black")
-  
-  if (str_detect(my_output_tag, "CECIDS|IECAM")) {
-    base <- 
-      base + 
-      geom_sf(
-        data = auxShp_nolake,
-        color = "red",
-        linewidth = 1,
-        fill = NA)
-    if (add_hp) {
-      base <- 
-      base + 
-      geom_sf(
-        data = auxShp_nolake %>% filter(community == "HYDE PARK"),
-        color = NA,
-        fill = "red",
-        alpha = 0.8)  
-    }
-  }
-  
-  story_plot <- 
-    base +
-    geom_sf(
-      data = pumaShp_nolake,
-      color = "chartreuse4",
-      fill = NA,
-      linewidth = 2) +
-    scale_fill_viridis_c(
-      name = "",
-      limits = val_limits, 
-      option = color_opt,
-      #trans = fill_trans,
-      labels = percent,
-      alpha = 1) + 
-    coord_sf(
-      xlim = with(bbox, c(xmin, xmax)),
-      ylim = with(bbox, c(ymin, ymax))) +
-    theme_void()
-  
-  ggsave(
-    filename = glue("{output_path}Story Map -- {save_tag}.png"),
-    plot = story_plot)
-  # width = X,
-  # height = X,
-  # units = "in
-
-  print(story_plot)
-}
-```
+<!--   for (ps in plot_stats) { -->
+<!--     static_map_val( -->
+<!--       plot_stat = ps, -->
+<!--       ... -->
+<!--     ) -->
+<!--   } -->
+<!-- } -->
+<!-- ``` -->
 
 
-```{r generate progression of maps to explain story of estimation}
+<!-- ```{r generate static plots of ccdf eligibility in levels and differences} -->
 
-### These are defaults set for telling the story of estimation
-# /!\ In the future, these could be generalized as inputs
-story_ages <- "Pre-K 4"
-story_outcome <- "ccdf_elig_incratio_225"
-story_ccdf_cut <- "225"
-story_recency <- "most_recent"
-story_bbox <- list(xmin = -87.672438, xmax = -87.561779, ymin = 41.757867, ymax = 41.821629)
-  # This can be identified from web tools like: https://tools.mofei.life/bbox
+<!-- # /*\ This code is not (yet) applicable to runs requested for OK, but is left -->
+<!-- # here for adaptation if desired -->
 
+<!-- if (FALSE) { -->
+<!--   for (out_var in c("ccdf", "le100", "le200")) { -->
 
-### Plot final, now-cast estimates
-story_ests_final <- 
-  nowcast_agg_tract %>% 
-  filter(
-    age == story_ages,
-    outcome_var == glue("ccdf_elig_incratio_{story_ccdf_cut}"),
-    pd == "nowcast",
-    cps_base_recency == story_recency)
-shp_final <- 
-  tractShp_nolake %>% 
-  merge(
-    story_ests_final,
-    by = "GEOID")
-val_limits <- range(story_ests_final$share, na.rm = T)
+<!--     if (out_var == "ccdf") { -->
+<!--       out_var_desc <- glue("{local_ccdf_name_short} - {local_ccdf_incratio_base}% {prog_income_thresh_label} ({date_range})") -->
+<!--       out_var_name <- glue("ccdf_elig_incratio_{local_ccdf_incratio_base}") -->
+<!--     } else if (out_var == "le100") { -->
+<!--       out_var_desc <- glue("Head Start Eligibility ({date_range})") -->
+<!--       out_var_name <- "incpov_le100_post_adj" -->
+<!--     } else if (out_var == "le200") { -->
+<!--       out_var_desc <- glue("Income <200% FPL ({date_range})") -->
+<!--       out_var_name <- "incpov_le200_post_adj" -->
+<!--     } -->
 
-story_map(
-  shp_final, 
-  fill_var = "share", 
-  val_limits, 
-  story_bbox, 
-  glue("final ELPEP CCDF, {story_ages}"))
+<!--     static_map_level_diff( -->
+<!--       estimates = nowcast_agg_zip %>% filter(age == age_agg_main), -->
+<!--       geo_level = "ZCTA", -->
+<!--       outcome = out_var_name, -->
+<!--       field_desc = out_var_desc, -->
+<!--       save_map = TRUE,  -->
+<!--       #val_limits = c(0, 0.6), -->
+<!--       show_legend = TRUE -->
+<!--     ) -->
 
-# If the output is specific to CECIDS or IECAM, create a second plot highlighting Hyde Park
-if (str_detect(my_output_tag, "CECIDS|IECAM")) {
-  story_map(
-    shp_final, 
-    fill_var = "share",
-    val_limits, 
-    story_bbox, 
-    glue("final ELPEP CCDF, {story_ages}, HP highlight"), 
-    add_hp = TRUE)  
-}
+<!--     static_map_level_diff( -->
+<!--       estimates = nowcast_agg_cty %>% filter(age == age_agg_main), -->
+<!--       geo_level = "County", -->
+<!--       outcome = out_var_name, -->
+<!--       field_desc = out_var_desc, -->
+<!--       save_map = TRUE,  -->
+<!--       #val_limits = c(0, 0.6), -->
+<!--       show_legend = TRUE -->
+<!--     ) -->
 
-### Base SAE estimates
+<!--     static_map_level_diff( -->
+<!--       estimates = nowcast_agg_sd %>% filter(age == age_agg_main), -->
+<!--       geo_level = "school", -->
+<!--       outcome = out_var_name, -->
+<!--       field_desc = out_var_desc, -->
+<!--       save_map = TRUE,  -->
+<!--       #val_limits = c(0, 0.6), -->
+<!--       show_legend = TRUE -->
+<!--     ) -->
 
-### ACS1 as basis, but highly aggregate
-load(file = glue("{output_path}acs1_data_{my_output_tag}.Rda"))
-story_ests_acs1 <- 
-  acs1_child %>% 
-  filter(
-    AGEP %in% c(0, 5)) %>% 
-  summarize(
-    .by = PUMA,
-    share = 
-      sum(PWGTP[get(glue("ccdf_elig_incratio_{story_ccdf_cut}")) == 1]) /
-      sum(PWGTP))
-shp_acs1 <- 
-  pumaShp_nolake %>% 
-  merge(
-    story_ests_acs1,
-    by = "PUMA")
-story_map(
-  shp_acs1, 
-  fill_var = "share",
-  val_limits, 
-  story_bbox, 
-  glue("ACS1 CCDF, {story_ages}"))
+<!--     if (exists("my_aux_geo")) { -->
+<!--       static_map_level_diff( -->
+<!--         estimates = nowcast_agg_aux %>% filter(age == age_agg_main), -->
+<!--         geo_level = "aux", -->
+<!--         geo_level_merge_field = "aux_geo_label", -->
+<!--         geo_level_desc = my_aux_geo_desc, -->
+<!--         outcome = out_var_name, -->
+<!--         field_desc = out_var_desc, -->
+<!--         save_map = TRUE,  -->
+<!--         #val_limits = c(0, 0.6), -->
+<!--         show_legend = TRUE -->
+<!--       )  -->
+<!--     } -->
+<!--   }  -->
+<!-- } -->
+<!-- ``` -->
 
 
-### ACS5 as predictor: wrong measure, but captures spatial heterogeneity
-load(file = glue("{output_path}acs5_data_{my_output_tag}.Rda"))
-story_ests_acs5 <- 
-  tractShp_nolake %>% 
-  merge(
-    acs5tract %>% 
-      select(GEOID, incpov_lt6_r0to100_est, incpov_lt6_r100to199_est) %>% 
-      mutate(share = incpov_lt6_r0to100_est + incpov_lt6_r100to199_est),
-    by = "GEOID")
-      
-story_map(
-  story_ests_acs5,
-  fill_var = "share",
-  val_limits = range(story_ests_acs5$share), 
-  story_bbox,
-  glue("ACS5 200pct FPL, {story_ages}"), 
-  color_opt = "plasma")
+<!-- ```{r generate tract-level maps within indicated geographies if specified for ccdf sensitivities} -->
 
-```
+<!-- if (exists("map_geos")) { -->
+<!--   lMap_out <- list(maps_by_geo = list(), -->
+<!--                    maps_by_inc = list()) -->
+
+<!--   prog_outs <-  -->
+<!--     nowcast_agg_tract$outcome_var %>%  -->
+<!--     str_subset("^bProg") %>%  -->
+<!--     sort_by_char_nums() %>%  -->
+<!--     levels() -->
+
+<!--   map_geo_field <-  -->
+<!--     case_match( -->
+<!--       map_geo_level, -->
+<!--       "tract" ~ "GEOID", -->
+<!--       "county" ~ "County", -->
+<!--       "school" ~ "school" -->
+<!--     ) -->
+
+<!--   # Loop across ages -->
+<!--   for (a in age_agg_main) {  -->
+<!--     ests_a <-  -->
+<!--       nowcast_agg_tract %>%  -->
+<!--       filter( -->
+<!--         age == a, -->
+<!--         outcome_var %in% prog_outs -->
+<!--       ) -->
+
+<!--     age_desc <-  -->
+<!--       a %>%  -->
+<!--       str_replace("age_(\\d+)to(\\d+)", "Age \\1-\\2") %>%  -->
+<!--       str_replace("age_(\\d+)", "Age \\1") -->
+
+<!--     share_range <- range(ests_a$share, na.rm = TRUE) -->
+
+<!--     # Loop across geographies -->
+
+<!--     for (g in map_geos) { -->
+
+<!--       # Identify tracts associated with the indicated geography -->
+<!--       if (str_to_lower(map_geo_level) == "county") { -->
+<!--         xwalk_g <- filter(geo_crosswalk, County == g) -->
+<!--       } else if (str_to_lower(map_geo_level) == "school") { -->
+<!--         xwalk_g <- filter(geo_crosswalk_sd, school == g) -->
+<!--       } else if (str_to_lower(map_geo_level) == "aux") { -->
+<!--         xwalk_g <- filter(geo_crosswalk_aux, get(my_aux_geo_field) == g) -->
+<!--       } -->
+
+<!--       map_tracts <- unique(xwalk_g$GEOID) -->
+<!--       ests_ag <- filter(ests_a, GEOID %in% map_tracts) -->
+
+<!--       for (o in ccdf_outs) { -->
+<!--         inc_thresh <- str_extract(o, "\\d+$") -->
+
+<!--         my_plot_ranged <-  -->
+<!--           static_map_val( -->
+<!--             estimates = ests_ag, -->
+<!--             geo_level = "tract", -->
+<!--             geo_level_merge_field = "GEOID", -->
+<!--             outcome = o, -->
+<!--             field_desc =  -->
+<!--               glue("{local_ccdf_name_short} Eligibility - ", -->
+<!--                    "{inc_thresh}% {prog_income_thresh_label}, {age_desc} ", -->
+<!--                    "({date_range})"), -->
+<!--             val_limits = share_range, -->
+<!--             show_legend = TRUE, -->
+<!--             map_title = g, -->
+<!--             plot_stat = "nowcast", -->
+<!--             file_tag = glue(" - {g}"), -->
+<!--             save_map = FALSE -->
+<!--           ) -->
+
+<!--         # lMap_out[["maps_by_inc"]] <-  -->
+<!--         #   append(lMap_out[["maps_by_inc"]], -->
+<!--         #          my_plot_ranged) -->
+<!--         lMap_out[["maps_by_inc"]][[length(lMap_out[["maps_by_inc"]]) + 1]] <-  -->
+<!--           my_plot_ranged -->
+
+<!--         # If it's the base CCDF income eligibility ratio, build a map with its own -->
+<!--         # scale to focus on geographic contrasts (rather than comparison of rates -->
+<!--         # across other income thresholds) -->
+<!--         if (str_detect(o, as.character(local_ccdf_incratio_base))) { -->
+<!--           my_plot_unranged <-  -->
+<!--             static_map_val( -->
+<!--               estimates = ests_ag, -->
+<!--               geo_level = "tract", -->
+<!--               geo_level_merge_field = "GEOID", -->
+<!--               outcome = o, -->
+<!--               field_desc =  -->
+<!--                 glue("{local_ccdf_name_short} Eligibility - ", -->
+<!--                      "{inc_thresh}% {prog_income_thresh_label}, {age_desc} ", -->
+<!--                      "({date_range})"), -->
+<!--               val_limits = NULL, -->
+<!--               show_legend = TRUE, -->
+<!--               map_title = g, -->
+<!--               plot_stat = "nowcast", -->
+<!--               file_tag = glue(" - {g} - geographic contrast"), -->
+<!--               save_map = FALSE -->
+<!--             ) -->
+
+<!--           lMap_out[["maps_by_geo"]][[length(lMap_out[["maps_by_geo"]]) + 1]] <-  -->
+<!--             my_plot_unranged -->
+<!--         } -->
+<!--       } -->
+<!--     } -->
+<!--   }  -->
+<!-- } -->
+<!-- ``` -->
+
+<!-- ```{r remove portions of shapes that are over lake michigan, eval = str_detect(my_output_tag, "CECIDS|IECAM")} -->
+
+<!-- #install.packages(c("rnaturalearth", "rnaturalearthdata")) -->
+<!-- library(rnaturalearth) -->
+<!-- library(rnaturalearthdata) -->
+
+<!-- target_crs <- st_crs(tractShp) -->
+
+<!-- lakes <-  -->
+<!--   rnaturalearth::ne_download( -->
+<!--     scale = "large", -->
+<!--     type = "lakes", -->
+<!--     category = "physical", -->
+<!--     returnclass = "sf") %>%  -->
+<!--   st_transform(target_crs) -->
+
+<!-- lake_michigan <- lakes %>% filter(name == "Lake Michigan") -->
+
+<!-- # Function to subtract the lake from tracts that touch Chicago (or from all tracts) --- -->
+<!-- subtract_lake <- function(my_shp) { -->
+
+<!--   my_shp <- st_transform(my_shp, target_crs) -->
+
+<!--   # This subsets to only Chicago intersections, temporarily -->
+<!--   # idx_touch_chi <- lengths(st_intersects(my_shp, chi_map)) > 0 -->
+<!--   # my_shp_chi <- my_shp[idx_touch_chi, ] -->
+
+<!--   tracts_no_lake <- st_difference(my_shp, st_union(lake_michigan)) -->
+<!--   tracts_no_lake <- tracts_no_lake[!st_is_empty(tracts_no_lake), ] -->
+<!--     # Drop any empty geometries (purely water tracts become empty after subtraction) -->
+
+<!--   #rbind(my_shp[!idx_touch_chi, ], tracts_no_lake)   -->
+<!--   return(tracts_no_lake) -->
+<!-- } -->
+
+<!-- tractShp_nolake <- subtract_lake(tractShp) -->
+<!-- pumaShp_nolake  <- subtract_lake(pumaShp) -->
+<!-- auxShp_nolake   <- subtract_lake(auxShp) -->
+<!-- ``` -->
+
+<!-- ```{r Function to build the bare bones of the 'story' maps} -->
+
+<!-- story_map <-  -->
+<!--   function( -->
+<!--     shpEsts,  -->
+<!--     fill_var, -->
+<!--     val_limits,  -->
+<!--     bbox,  -->
+<!--     save_tag,  -->
+<!--     color_opt = "viridis",  -->
+<!--     save_map = TRUE,  -->
+<!--     add_hp = FALSE) { -->
+
+<!--   base <-  -->
+<!--     shpEsts %>%  -->
+<!--     ggplot() + -->
+<!--     #annotation_map_tile(type = "cartolight", zoomin = -1, alpha = 0.7) + -->
+<!--     geom_sf( -->
+<!--       aes(fill = get(fill_var)), -->
+<!--       linewidth = 0.025, -->
+<!--       color = "black") -->
+
+<!--   story_plot <-  -->
+<!--     base + -->
+<!--     geom_sf( -->
+<!--       data = pumaShp_nolake, -->
+<!--       color = "chartreuse4", -->
+<!--       fill = NA, -->
+<!--       linewidth = 2) + -->
+<!--     scale_fill_viridis_c( -->
+<!--       name = "", -->
+<!--       limits = val_limits,  -->
+<!--       option = color_opt, -->
+<!--       #trans = fill_trans, -->
+<!--       labels = percent, -->
+<!--       alpha = 1) +  -->
+<!--     coord_sf( -->
+<!--       xlim = with(bbox, c(xmin, xmax)), -->
+<!--       ylim = with(bbox, c(ymin, ymax))) + -->
+<!--     theme_void() -->
+
+<!--   ggsave( -->
+<!--     filename = glue("{output_path}Story Map -- {save_tag}.png"), -->
+<!--     plot = story_plot) -->
+<!--   # width = X, -->
+<!--   # height = X, -->
+<!--   # units = "in -->
+
+<!--   print(story_plot) -->
+<!-- } -->
+<!-- ``` -->
 
 
-```{r if multiple ccdf cuts are specified -- contrast them statewide and at any geographic levels of focus}
-if (length(local_ccdf_incratio_cuts) > 1 && exists("map_geos")) {
-  lAggs <- 
-    list(school = nowcast_agg_sd  %>% rename(geo = school),
-         county = nowcast_agg_cty %>% rename(geo = County),
-         zip    = nowcast_agg_zip %>% rename(geo = ZCTA))
-  if (exists("my_aux_geo")) {
-    lAggs[["aux"]] <- nowcast_agg_aux %>% rename(geo = aux_geo_label)
-  }
+<!-- ```{r generate progression of maps to explain story of estimation} -->
 
-  agg <- 
-    lAggs[[map_geo_level]] %>% 
-    filter(geo %in% map_geos,
-           pd == "nowcast",
-           cps_base_recency == "most_recent",
-           outcome_var %like% "ccdf") %>% 
-    select(geo, age, outcome_var, count, share) %>% 
-    mutate(outcome_var = sort_by_char_nums(outcome_var)) %>% 
-    arrange(age, geo, outcome_var) %>% 
-    data.table() %>% 
-    .[j = `:=`(added_count = count - lag(count),
-               added_share = share - lag(share)),
-      by = .(age, geo)] %>% 
-    .[j = `:=`(added_count = ifelse(is.na(added_count), count, added_count),
-               added_share = ifelse(is.na(added_share), share, added_share))]
-    
-  fig_comp_thresh_geos <- 
-    agg %>% 
-    filter(age == "age_0to5") %>% 
-    mutate(outcome_var = factor(outcome_var, 
-                                levels = rev(levels(outcome_var))),
-           outcome_var = factor(outcome_var,
-                                levels = levels(outcome_var),
-                                labels = levels(outcome_var) %>% 
-                                           str_extract("\\d+$") %>% 
-                                           paste0("%")))%>% 
-    ggplot(aes(x = factor(geo),
-               y = added_share,
-               fill = outcome_var)) +
-    geom_bar(stat = "identity",
-             width = 0.3) +
-    scale_y_continuous(labels = percent) +
-    scale_fill_viridis_d(name = glue("Income Threshold\nas % of {prog_income_thresh_label}"),
-                         option = "G",
-                         guide = guide_legend(reverse = TRUE,
-                                              byrow = TRUE)) +
-    labs(title = glue("Increases in Estimated {local_ccdf_name_short} Eligibility for Increasing the Income Threshold"),
-         subtitle = "by Selected Geographies",
-         x = "",
-         y = glue("{local_ccdf_name_short} Eligibility")) +
-    theme_minimal() +
-    theme(axis.text = element_text(size = 12),
-          legend.position = "bottom",
-          legend.title = element_text(hjust = 1),
-          axis.text.x = element_text(angle = 90))
-}
-```
+<!-- ### These are defaults set for telling the story of estimation -->
+<!-- # /!\ In the future, these could be generalized as inputs -->
+<!-- story_ages <- "Pre-K 4" -->
+<!-- story_outcome <- "ccdf_elig_incratio_225" -->
+<!-- story_ccdf_cut <- "225" -->
+<!-- story_recency <- "most_recent" -->
+<!-- story_bbox <- list(xmin = -87.672438, xmax = -87.561779, ymin = 41.757867, ymax = 41.821629) -->
+<!--   # This can be identified from web tools like: https://tools.mofei.life/bbox -->
 
 
-```{r collect output into presentation deck}
-# This powerpoint output is intended to capture the figures and maps generated
-# below for easy display
-if (exists("map_geos")) {
-  ppt <- 
-    read_pptx() %>% 
-    add_slide(layout = "Title Slide") %>% 
-    ph_with(glue("Maps and Figures for Examining {local_ccdf_name_short} Eligibility for {my_state_abbr}"),
-            location = ph_location_type(type = "ctrTitle"))
-  
-  if (exists("map_geos")) {
-    # Generate slides for geographic contrasts
-    ppt <- 
-      ppt %>% 
-      add_slide(layout = "Section Header") %>% 
-      ph_with(glue("Maps Showing {local_ccdf_name_short} Eligibility by Select Geographies"),
-              location = ph_location_type(type = "title"))
-    
-    for (i in 1:length(lMap_out$maps_by_geo)) {
-      ppt <- 
-        ppt %>% 
-        add_slide() %>% 
-        ph_with(lMap_out$maps_by_geo[[i]],
-                location = ph_location_type(type = "body"))
-    }  
-    
-    # If multiple threshold cutpoints had been selected, output those figures
-    if (length(local_ccdf_incratio_cuts) > 1) {
-      ppt <- 
-        ppt %>% 
-        add_slide(layout = "Section Header") %>% 
-        ph_with(glue("Increase of Eligibility by Hypothetical Income Thresholds"),
-                location = ph_location_type(type = "title")) %>% 
-        add_slide() %>% 
-        ph_with(fig_comp_thresh_geos,
-                location = ph_location_type(type = "body")) %>% 
-        add_slide(layout = "Section Header") %>% 
-        ph_with(glue("Maps Showing {local_ccdf_name_short} Eligibility by Income Threshold for Select Geographies"),
-                location = ph_location_type(type = "title"))
-      
-      for (i in 1:length(lMap_out$maps_by_inc))
-        ppt <- 
-          ppt %>% 
-          add_slide() %>% 
-          ph_with(lMap_out$maps_by_inc[[i]],
-                  location = ph_location_type(type = "body"))
-    }
-    
-    # Output
-    print(ppt, 
-          target = glue("{output_path}Maps and Figures for Examining {local_ccdf_name_short} Eligibility for {my_state_abbr} - {my_output_tag}.pptx"))
-  } 
-}
-```
+<!-- ### Plot final, now-cast estimates -->
+<!-- story_ests_final <-  -->
+<!--   nowcast_agg_tract %>%  -->
+<!--   filter( -->
+<!--     age == story_ages, -->
+<!--     outcome_var == glue("ccdf_elig_incratio_{story_ccdf_cut}"), -->
+<!--     pd == "nowcast", -->
+<!--     cps_base_recency == story_recency) -->
+<!-- shp_final <-  -->
+<!--   tractShp_nolake %>%  -->
+<!--   merge( -->
+<!--     story_ests_final, -->
+<!--     by = "GEOID") -->
+<!-- val_limits <- range(story_ests_final$share, na.rm = T) -->
+
+<!-- story_map( -->
+<!--   shp_final,  -->
+<!--   fill_var = "share",  -->
+<!--   val_limits,  -->
+<!--   story_bbox,  -->
+<!--   glue("final ELPEP CCDF, {story_ages}")) -->
+
+<!-- # If the output is specific to CECIDS or IECAM, create a second plot highlighting Hyde Park -->
+<!-- if (str_detect(my_output_tag, "CECIDS|IECAM")) { -->
+<!--   story_map( -->
+<!--     shp_final,  -->
+<!--     fill_var = "share", -->
+<!--     val_limits,  -->
+<!--     story_bbox,  -->
+<!--     glue("final ELPEP CCDF, {story_ages}, HP highlight"),  -->
+<!--     add_hp = TRUE)   -->
+<!-- } -->
+
+<!-- ### Base SAE estimates -->
+
+<!-- ### ACS1 as basis, but highly aggregate -->
+<!-- load(file = glue("{output_path}acs1_data_{my_output_tag}.Rda")) -->
+<!-- story_ests_acs1 <-  -->
+<!--   acs1_child %>%  -->
+<!--   filter( -->
+<!--     AGEP %in% c(0, 5)) %>%  -->
+<!--   summarize( -->
+<!--     .by = PUMA, -->
+<!--     share =  -->
+<!--       sum(PWGTP[get(glue("ccdf_elig_incratio_{story_ccdf_cut}")) == 1]) / -->
+<!--       sum(PWGTP)) -->
+<!-- shp_acs1 <-  -->
+<!--   pumaShp_nolake %>%  -->
+<!--   merge( -->
+<!--     story_ests_acs1, -->
+<!--     by = "PUMA") -->
+<!-- story_map( -->
+<!--   shp_acs1,  -->
+<!--   fill_var = "share", -->
+<!--   val_limits,  -->
+<!--   story_bbox,  -->
+<!--   glue("ACS1 CCDF, {story_ages}")) -->
+
+
+<!-- ### ACS5 as predictor: wrong measure, but captures spatial heterogeneity -->
+<!-- load(file = glue("{output_path}acs5_data_{my_output_tag}.Rda")) -->
+<!-- story_ests_acs5 <-  -->
+<!--   tractShp_nolake %>%  -->
+<!--   merge( -->
+<!--     acs5tract %>%  -->
+<!--       select(GEOID, incpov_lt6_r0to100_est, incpov_lt6_r100to199_est) %>%  -->
+<!--       mutate(share = incpov_lt6_r0to100_est + incpov_lt6_r100to199_est), -->
+<!--     by = "GEOID") -->
+
+<!-- story_map( -->
+<!--   story_ests_acs5, -->
+<!--   fill_var = "share", -->
+<!--   val_limits = range(story_ests_acs5$share),  -->
+<!--   story_bbox, -->
+<!--   glue("ACS5 200pct FPL, {story_ages}"),  -->
+<!--   color_opt = "plasma") -->
+
+<!-- ``` -->
+
+
+<!-- ```{r if multiple ccdf cuts are specified -- contrast them statewide and at any geographic levels of focus} -->
+<!-- if (length(local_ccdf_incratio_cuts) > 1 && exists("map_geos")) { -->
+<!--   lAggs <-  -->
+<!--     list(school = nowcast_agg_sd  %>% rename(geo = school), -->
+<!--          county = nowcast_agg_cty %>% rename(geo = County), -->
+<!--          zip    = nowcast_agg_zip %>% rename(geo = ZCTA)) -->
+<!--   if (exists("my_aux_geo")) { -->
+<!--     lAggs[["aux"]] <- nowcast_agg_aux %>% rename(geo = aux_geo_label) -->
+<!--   } -->
+
+<!--   agg <-  -->
+<!--     lAggs[[map_geo_level]] %>%  -->
+<!--     filter(geo %in% map_geos, -->
+<!--            pd == "nowcast", -->
+<!--            cps_base_recency == "most_recent", -->
+<!--            outcome_var %like% "ccdf") %>%  -->
+<!--     select(geo, age, outcome_var, count, share) %>%  -->
+<!--     mutate(outcome_var = sort_by_char_nums(outcome_var)) %>%  -->
+<!--     arrange(age, geo, outcome_var) %>%  -->
+<!--     data.table() %>%  -->
+<!--     .[j = `:=`(added_count = count - lag(count), -->
+<!--                added_share = share - lag(share)), -->
+<!--       by = .(age, geo)] %>%  -->
+<!--     .[j = `:=`(added_count = ifelse(is.na(added_count), count, added_count), -->
+<!--                added_share = ifelse(is.na(added_share), share, added_share))] -->
+
+<!--   fig_comp_thresh_geos <-  -->
+<!--     agg %>%  -->
+<!--     filter(age == "age_0to5") %>%  -->
+<!--     mutate(outcome_var = factor(outcome_var,  -->
+<!--                                 levels = rev(levels(outcome_var))), -->
+<!--            outcome_var = factor(outcome_var, -->
+<!--                                 levels = levels(outcome_var), -->
+<!--                                 labels = levels(outcome_var) %>%  -->
+<!--                                            str_extract("\\d+$") %>%  -->
+<!--                                            paste0("%")))%>%  -->
+<!--     ggplot(aes(x = factor(geo), -->
+<!--                y = added_share, -->
+<!--                fill = outcome_var)) + -->
+<!--     geom_bar(stat = "identity", -->
+<!--              width = 0.3) + -->
+<!--     scale_y_continuous(labels = percent) + -->
+<!--     scale_fill_viridis_d(name = glue("Income Threshold\nas % of {prog_income_thresh_label}"), -->
+<!--                          option = "G", -->
+<!--                          guide = guide_legend(reverse = TRUE, -->
+<!--                                               byrow = TRUE)) + -->
+<!--     labs(title = glue("Increases in Estimated {local_ccdf_name_short} Eligibility for Increasing the Income Threshold"), -->
+<!--          subtitle = "by Selected Geographies", -->
+<!--          x = "", -->
+<!--          y = glue("{local_ccdf_name_short} Eligibility")) + -->
+<!--     theme_minimal() + -->
+<!--     theme(axis.text = element_text(size = 12), -->
+<!--           legend.position = "bottom", -->
+<!--           legend.title = element_text(hjust = 1), -->
+<!--           axis.text.x = element_text(angle = 90)) -->
+<!-- } -->
+<!-- ``` -->
+
+
+<!-- ```{r collect output into presentation deck} -->
+<!-- # This powerpoint output is intended to capture the figures and maps generated -->
+<!-- # below for easy display -->
+<!-- if (exists("map_geos")) { -->
+<!--   ppt <-  -->
+<!--     read_pptx() %>%  -->
+<!--     add_slide(layout = "Title Slide") %>%  -->
+<!--     ph_with(glue("Maps and Figures for Examining {local_ccdf_name_short} Eligibility for {my_state_abbr}"), -->
+<!--             location = ph_location_type(type = "ctrTitle")) -->
+
+<!--   if (exists("map_geos")) { -->
+<!--     # Generate slides for geographic contrasts -->
+<!--     ppt <-  -->
+<!--       ppt %>%  -->
+<!--       add_slide(layout = "Section Header") %>%  -->
+<!--       ph_with(glue("Maps Showing {local_ccdf_name_short} Eligibility by Select Geographies"), -->
+<!--               location = ph_location_type(type = "title")) -->
+
+<!--     for (i in 1:length(lMap_out$maps_by_geo)) { -->
+<!--       ppt <-  -->
+<!--         ppt %>%  -->
+<!--         add_slide() %>%  -->
+<!--         ph_with(lMap_out$maps_by_geo[[i]], -->
+<!--                 location = ph_location_type(type = "body")) -->
+<!--     }   -->
+
+<!--     # If multiple threshold cutpoints had been selected, output those figures -->
+<!--     if (length(local_ccdf_incratio_cuts) > 1) { -->
+<!--       ppt <-  -->
+<!--         ppt %>%  -->
+<!--         add_slide(layout = "Section Header") %>%  -->
+<!--         ph_with(glue("Increase of Eligibility by Hypothetical Income Thresholds"), -->
+<!--                 location = ph_location_type(type = "title")) %>%  -->
+<!--         add_slide() %>%  -->
+<!--         ph_with(fig_comp_thresh_geos, -->
+<!--                 location = ph_location_type(type = "body")) %>%  -->
+<!--         add_slide(layout = "Section Header") %>%  -->
+<!--         ph_with(glue("Maps Showing {local_ccdf_name_short} Eligibility by Income Threshold for Select Geographies"), -->
+<!--                 location = ph_location_type(type = "title")) -->
+
+<!--       for (i in 1:length(lMap_out$maps_by_inc)) -->
+<!--         ppt <-  -->
+<!--           ppt %>%  -->
+<!--           add_slide() %>%  -->
+<!--           ph_with(lMap_out$maps_by_inc[[i]], -->
+<!--                   location = ph_location_type(type = "body")) -->
+<!--     } -->
+
+<!--     # Output -->
+<!--     print(ppt,  -->
+<!--           target = glue("{output_path}Maps and Figures for Examining {local_ccdf_name_short} Eligibility for {my_state_abbr} - {my_output_tag}.pptx")) -->
+<!--   }  -->
+<!-- } -->
+<!-- ``` -->
 

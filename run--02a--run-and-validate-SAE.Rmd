@@ -1311,519 +1311,519 @@ if (rerun_sae | !file.exists(sae_out_file)) {
 }
 ```
 
-```{r extract estimate tables from sae output}
-for (spec in specs) {
-  stem <- glue("sae_results_{spec}")
-  assign(glue("{stem}_out"),
-         get(stem)[["sae_out_decompress"]])
-}
-```
+<!-- ```{r extract estimate tables from sae output} -->
+<!-- for (spec in specs) { -->
+<!--   stem <- glue("sae_results_{spec}") -->
+<!--   assign(glue("{stem}_out"), -->
+<!--          get(stem)[["sae_out_decompress"]]) -->
+<!-- } -->
+<!-- ``` -->
 
-```{r pick a single SAE sensitivity to investigate}
-check_redis_sae <- sae_results_incpov_ctrls_100_05$sae_out_decompress
-check_stats_puma <- 
-  acs1_elig %>% 
-  .[between(AGEP, 0, 5),
-    j = .(wgt = sum(PWGTP)),
-    by = .(PUMA, vc_value = fam_incpov_ratio_cat_by100)] %>% 
-  .[j = share_acs1 := wgt / sum(wgt),
-          by = PUMA] %>% 
-  select(-wgt)
-```
+<!-- ```{r pick a single SAE sensitivity to investigate} -->
+<!-- check_redis_sae <- sae_results_incpov_ctrls_100_05$sae_out_decompress -->
+<!-- check_stats_puma <-  -->
+<!--   acs1_elig %>%  -->
+<!--   .[between(AGEP, 0, 5), -->
+<!--     j = .(wgt = sum(PWGTP)), -->
+<!--     by = .(PUMA, vc_value = fam_incpov_ratio_cat_by100)] %>%  -->
+<!--   .[j = share_acs1 := wgt / sum(wgt), -->
+<!--           by = PUMA] %>%  -->
+<!--   select(-wgt) -->
+<!-- ``` -->
 
-```{r examine overages}
-# Examine how the sums look
-overs <- 
-  check_redis_sae %>% 
-  group_by(GEOID, PUMA) %>% 
-  summarize(sums = sum(share_model_redis_pct01),
-            check = sum(share_model_redis_pct01_infl))
+<!-- ```{r examine overages} -->
+<!-- # Examine how the sums look -->
+<!-- overs <-  -->
+<!--   check_redis_sae %>%  -->
+<!--   group_by(GEOID, PUMA) %>%  -->
+<!--   summarize(sums = sum(share_model_redis_pct01), -->
+<!--             check = sum(share_model_redis_pct01_infl)) -->
 
-ggplot(overs,
-       aes(x = sums)) +
-  geom_density()
+<!-- ggplot(overs, -->
+<!--        aes(x = sums)) + -->
+<!--   geom_density() -->
 
-# Concentrated in smaller sets of PUMAs?
-overs %>% 
-  group_by(PUMA) %>% 
-  summarize(pct_over = mean(sums>1.5))
+<!-- # Concentrated in smaller sets of PUMAs? -->
+<!-- overs %>%  -->
+<!--   group_by(PUMA) %>%  -->
+<!--   summarize(pct_over = mean(sums>1.5)) -->
 
-```
+<!-- ``` -->
 
-```{r calculate percentages of estimates falling outside of [0,1], eval = developer_mode}
-check_redis_sae %>% 
-  group_by(vc_value) %>% 
-  summarize(
-    share_model_redis_pct_lt0 = meanNA(share_model_redis_pct < 0) %>% percent(1),
-    share_model_redis_pct_gt1 = meanNA(share_model_redis_pct > 1) %>% percent(1),
-    
-    share_model_redis_log_lt0 = meanNA(share_model_redis_log < 0) %>% percent(1),
-    share_model_redis_log_gt1 = meanNA(share_model_redis_log > 1) %>% percent(1),
-    
-    share_fh_redis_pct_lt0    = meanNA(share_fh_redis_pct    < 0) %>% percent(1),
-    share_fh_redis_pct_gt1    = meanNA(share_fh_redis_pct    > 1) %>% percent(1),
-    
-    share_fh_redis_log_lt0    = meanNA(share_fh_redis_log    < 0) %>% percent(1),
-    share_fh_redis_log_gt1    = meanNA(share_fh_redis_log    > 1) %>% percent(1)
-  ) %>% 
-  pivot_longer(
-    cols = -vc_value
-  ) %>% 
-  pivot_wider(
-    names_from = vc_value,
-    values_from = value
-  )
-```
+<!-- ```{r calculate percentages of estimates falling outside of [0,1], eval = developer_mode} -->
+<!-- check_redis_sae %>%  -->
+<!--   group_by(vc_value) %>%  -->
+<!--   summarize( -->
+<!--     share_model_redis_pct_lt0 = meanNA(share_model_redis_pct < 0) %>% percent(1), -->
+<!--     share_model_redis_pct_gt1 = meanNA(share_model_redis_pct > 1) %>% percent(1), -->
 
+<!--     share_model_redis_log_lt0 = meanNA(share_model_redis_log < 0) %>% percent(1), -->
+<!--     share_model_redis_log_gt1 = meanNA(share_model_redis_log > 1) %>% percent(1), -->
 
+<!--     share_fh_redis_pct_lt0    = meanNA(share_fh_redis_pct    < 0) %>% percent(1), -->
+<!--     share_fh_redis_pct_gt1    = meanNA(share_fh_redis_pct    > 1) %>% percent(1), -->
 
-```{r check the results -- final versus acs5, eval = developer_mode}
-# This is done to see if we obtain something relatively close to the 45
-check_redis_sae %>% 
-  ggplot(aes(x = share_acs5,
-             y = share_model_redis_pct)) +
-  geom_abline() + 
-  geom_point(alpha = 0.1) + 
-  geom_smooth() +
-  geom_hline(yintercept = 0, color = "red") +
-  geom_hline(yintercept = 1, color = "red") +
-  facet_wrap(~vc_value)
-
-check_redis_sae %>% 
-  ggplot(aes(x = share_acs5,
-             y = share_model_redis_log)) +
-  geom_abline() + 
-  geom_point(alpha = 0.1) +
-  geom_smooth() +
-  geom_hline(yintercept = 0, color = "red") +
-  geom_hline(yintercept = 1, color = "red") +
-  facet_wrap(~vc_value)
-
-# Check the correlations between each adjustment type and the acs5 -- seems that
-# the pct adjustment -- despite violating [0,1] bounds -- respects
-
-check_redis_sae %>% 
-  group_by(vc_value) %>% 
-  summarize(cor_acs5_pct = cor(share_acs5, share_model_redis_pct, use = "pairwise"),
-            cor_acs5_log = cor(share_acs5, share_model_redis_log, use = "pairwise"))
-  # True -- they are often clearly better. This is never mind the fact that the 
-  # slopes of the former are also closer to 1.
-```
-
-```{r check the results -- final_bounded versus acs5, eval = developer_mode}
-# This is done to see if we obtain something relatively close to the 45
-check_redis_sae %>% 
-  ggplot(aes(x = share_acs5,
-             y = share_model_redis_pct01_infl)) +
-  geom_abline() + 
-  geom_point(alpha = 0.1) + 
-  geom_smooth() +
-  geom_hline(yintercept = 0, color = "red") +
-  geom_hline(yintercept = 1, color = "red") +
-  facet_wrap(~vc_value)
-
-check_redis_sae %>% 
-  ggplot(aes(x = share_model_redis_pct,
-             y = share_model_redis_pct01_infl)) +
-  geom_abline() + 
-  geom_point(alpha = 0.1) +
-  geom_smooth() +
-  geom_hline(yintercept = 0, color = "red") +
-  geom_hline(yintercept = 1, color = "red") +
-  facet_wrap(~vc_value)
-
-# Check the correlations between each adjustment type and the acs5 -- seems that
-# the pct adjustment -- despite violating [0,1] bounds -- respects
-
-check_redis_sae %>% 
-  group_by(vc_value) %>% 
-  summarize(cor_acs5_pct = cor(share_acs5,            share_model_redis_pct01_infl, use = "pairwise"),
-            cor_acs5_log = cor(share_model_redis_pct, share_model_redis_pct01_infl, use = "pairwise"))
-  # True -- they are often clearly better. This is never mind the fact that the 
-  # slopes of the former are also closer to 1.
-```
-
-```{r how does the adjusted values compare with the original, eval = developer_mode}
-check_redis_sae %>% 
-  ggplot(aes(x = share_model_trunc,
-             y = share_model_redis_pct01_infl)) +
-  geom_abline() + 
-  geom_point(alpha = 0.1) +
-  geom_smooth() +
-  facet_wrap(~vc_value)
-  # In short -- on average, they're close to the 45
-
-```
-
-```{r examine distributions and correlations of original and final SAE vs acs5}
-comp_plot <- function(field1, field2) {
-  check_redis_sae %>% 
-  filter(!is.na(get(field1)),
-         !is.na(get(field2))) %>% 
-  ggplot(aes(x = get(field1),
-             y = get(field2))) +
-  geom_abline() + 
-  geom_point(alpha = 0.1) +
-  geom_smooth() + 
-  scale_y_continuous(limits = c(0, 1)) +
-  labs(x = field1, y = field2) +
-  facet_wrap(~vc_value)
-}
-
-comp_plot("share_acs5", "share_model_trunc")
-comp_plot("share_acs5", "share_model_redis_pct")
-comp_plot("share_acs5", "share_model_redis_pct01_infl")
-
-check_redis_sae %>% 
-  group_by(vc_value) %>% 
-  summarize(cor_acs5_sae  = cor(share_acs5, share_model_trunc,            use = "pairwise") %>% round(3),
-            cor_acs5_pct = cor(share_acs5, share_model_redis_pct, use = "pairwise") %>% round(3),
-            cor_acs5_infl = cor(share_acs5, share_model_redis_pct01_infl, use = "pairwise") %>% round(3),
-            
-            var_acs5 = varNA(share_acs5) %>% round(3),
-            var_sae  = varNA(share_model_trunc) %>% round(3),
-            var_pct = varNA(share_model_redis_pct) %>% round(3),
-            var_infl = varNA(share_model_redis_pct01_infl) %>% round(3)) %>% 
-  ungroup()
-  # Shows that correlations have dropped somewhat with each manipulation, but 
-  # the variances are substantially more realistic, which is critical
-  # Note -- these comparisons don't capture the greater alignment with ACS 1
-```
-
-```{r check final accordance with PUMA-level statistics, eval = developer_mode}
-# Here, we calculate population-weighted averages, for comparison with PUMA-level
-# averages directly from the ACS 1
-est_vs_acs1 <- 
-  check_redis_sae %>% 
-  ungroup() %>%
-  select(GEOID, PUMA, vc_value, pop, 
-         share_acs5, share_model_trunc, share_model_redis_pct,
-         share_model_redis_pct01_infl) %>% 
-  pivot_longer(cols = -c(GEOID, PUMA, vc_value, pop),
-               names_to = "method",
-               values_to = "estimate") %>% 
-  group_by(PUMA, vc_value, method) %>% 
-  summarize(
-    # Checking: this should be unique
-    estimate_puma = weighted.mean(x = estimate, w = pop)
-    ) %>% 
-  mutate(
-    method = factor(method,
-                    levels = c("share_acs5", 
-                               "share_model_trunc", 
-                               "share_model_redis_pct",
-                               "share_model_redis_pct01_infl"))
-  ) %>% 
-  merge(check_stats_puma,
-        by = c("PUMA", "vc_value"))
-
-ggplot(est_vs_acs1,
-       aes(x = share_acs1,
-           y = estimate_puma,
-           color = method)) +
-  geom_abline() + 
-  geom_point() + 
-  geom_smooth() +
-  facet_grid(vc_value ~ method) +
-  theme(legend.position = "bottom")
-
-  # ACS5 (red) is inconsistent -- which makes sense because they are lagged!
-  # The original SAE estimates (yellow) show clear compression
-  # The raw redistributed estimates (green) are highly consistent for each band
-  # The truncated/reinflated estimates (blue) are also highly consistent for
-  #   each band, but of course also respect 0% floor and 100% ceiling for each 
-  #   tract. Seem that this advantage did not create problems for PUMA-level 
-  #   aggregates.
-  # The estimates taken directly from the ACS5 (purple) are also impressively 
-  #   consistent with the ACS1
-
-```
-
-
-#### Compare Tract-Level SAE Estimates to the ACS 5-year
-
-
-```{r compare measure variance in acs5 vs sae by PUMA, eval = developer_mode}
-var_prop_acs5_sae <- 
-  sae_results_incpov_ctrls_100_05$sae_out %>% 
-  filter(vc_value == "0%-100%") %>% 
-  mutate(acs5_pov = incpov_lt6_r0to50_est + incpov_lt6_r50to100_est) %>% 
-  group_by(PUMA) %>% 
-  summarize(var_acs5_pov = varNA(acs5_pov),
-            var_sae_pov  = varNA(share_model_trunc),
-            avg_acs5_pov = meanNA(acs5_pov),
-            avg_sae_pov  = meanNA(share_model_trunc)) %>% 
-  mutate(ratio_var_acs5_sae = var_acs5_pov / var_sae_pov)
-
-ggplot(var_prop_acs5_sae,
-       aes(x = reorder(PUMA, ratio_var_acs5_sae),
-           y = ratio_var_acs5_sae)) + 
-  geom_bar(stat = "identity") +
-  geom_hline(yintercept = 1, 
-             color = "red") +
-  labs(x = "PUMA",
-       y = "Ratio of ACS5 Variance to SAE") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
-
-ggplot(var_prop_acs5_sae,
-       aes(x = avg_acs5_pov,
-           y = ratio_var_acs5_sae,
-           label = PUMA)) + 
-  geom_point() + 
-  geom_text(vjust = 1) +
-  labs(x = "ACS5 Poverty Rate",
-       y = "Ratio of ACS5 Variance to SAE") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
-  
-ggplot(var_prop_acs5_sae,
-       aes(x = avg_acs5_pov,
-           y = avg_sae_pov,
-           label = PUMA)) + 
-  geom_point() + 
-  geom_abline() +
-  geom_text(vjust = 1) +
-  labs(title = "Comparison of PUMA-Level ACS5 and SAE Estimates (Simple averages)",
-         x = "ACS5 Poverty Rate",
-       y = "SAE Poverty Rate") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
-  # NOTE -- this isn't what we're worried about. We're worried about the ACS1 comparison.
-  # See e.g. acs1_elig[between(AGEP, 0, 5), j = sum(PWGTP[fam_incpov_ratio_cat_by100 == "0%-100%"])/sum(PWGTP), by = PUMA]
-```
+<!--     share_fh_redis_log_lt0    = meanNA(share_fh_redis_log    < 0) %>% percent(1), -->
+<!--     share_fh_redis_log_gt1    = meanNA(share_fh_redis_log    > 1) %>% percent(1) -->
+<!--   ) %>%  -->
+<!--   pivot_longer( -->
+<!--     cols = -vc_value -->
+<!--   ) %>%  -->
+<!--   pivot_wider( -->
+<!--     names_from = vc_value, -->
+<!--     values_from = value -->
+<!--   ) -->
+<!-- ``` -->
 
 
 
-#### Map Components of the SAE Estimates
+<!-- ```{r check the results -- final versus acs5, eval = developer_mode} -->
+<!-- # This is done to see if we obtain something relatively close to the 45 -->
+<!-- check_redis_sae %>%  -->
+<!--   ggplot(aes(x = share_acs5, -->
+<!--              y = share_model_redis_pct)) + -->
+<!--   geom_abline() +  -->
+<!--   geom_point(alpha = 0.1) +  -->
+<!--   geom_smooth() + -->
+<!--   geom_hline(yintercept = 0, color = "red") + -->
+<!--   geom_hline(yintercept = 1, color = "red") + -->
+<!--   facet_wrap(~vc_value) -->
 
-```{r set up comparisons of data}
-pov_p <- 
-  lapply(c("05", "612"),
-         function(a) {
-           get(glue("sae_results_incpov_ctrls_mix_{a}"))$sae_out %>% 
-             filter(vc_value %in% c("0%-50%", "50%-100%")) %>% 
-             group_by(GEOID) %>% 
-             summarize(acs1_pov       = sum(share_direct),
-                       sae_pov_fh     = sum(share_fh_trunc),
-                       sae_pov_model  = sum(share_model_trunc))
-         }
-  )
+<!-- check_redis_sae %>%  -->
+<!--   ggplot(aes(x = share_acs5, -->
+<!--              y = share_model_redis_log)) + -->
+<!--   geom_abline() +  -->
+<!--   geom_point(alpha = 0.1) + -->
+<!--   geom_smooth() + -->
+<!--   geom_hline(yintercept = 0, color = "red") + -->
+<!--   geom_hline(yintercept = 1, color = "red") + -->
+<!--   facet_wrap(~vc_value) -->
 
-tractShp_pov <- 
-  tractShp %>% 
-  left_join(pov_p[[1]] %>% rename(acs1_pov_05      = acs1_pov,
-                                  sae_pov_fh_05    = sae_pov_fh,
-                                  sae_pov_model_05 = sae_pov_model),
-            by = "GEOID") %>% 
-  left_join(pov_p[[2]] %>% rename(acs1_pov_612      = acs1_pov,
-                                  sae_pov_fh_612    = sae_pov_fh,
-                                  sae_pov_model_612 = sae_pov_model),
-            by = "GEOID") %>% 
-  left_join(acs5tract %>% select(GEOID, acs5_pov = incpov_r0to100_est),
-            by = "GEOID")
+<!-- # Check the correlations between each adjustment type and the acs5 -- seems that -->
+<!-- # the pct adjustment -- despite violating [0,1] bounds -- respects -->
 
-```
+<!-- check_redis_sae %>%  -->
+<!--   group_by(vc_value) %>%  -->
+<!--   summarize(cor_acs5_pct = cor(share_acs5, share_model_redis_pct, use = "pairwise"), -->
+<!--             cor_acs5_log = cor(share_acs5, share_model_redis_log, use = "pairwise")) -->
+<!--   # True -- they are often clearly better. This is never mind the fact that the  -->
+<!--   # slopes of the former are also closer to 1. -->
+<!-- ``` -->
 
-```{r set color scale}
-map_sae_components <- function(dt, fill_field, field_label, val_limits, save_label) {
-  
-  pumas_to_keep <-
-    geo_crosswalk[GEOID %in% dt$GEOID] %>% 
-    .[["PUMA"]] %>% 
-    unique()
-  
-  pumaShp_sub <-
-    pumaShp %>% 
-    filter(PUMA %in% pumas_to_keep)
-  
-  my_plot <- 
-    ggplot() +
-    geom_sf(data = dt,
-            aes_string(fill = fill_field),
-            linewidth = 0.025,
-            color = "black") +
-    geom_sf(data = pumaShp_sub,
-            color = "red",
-            linewidth = 0.75,
-            fill = NA) +
-    scale_fill_viridis_c(name   = field_label,
-                         limits = val_limits,
-                         option = "viridis", #"plasma", # 
-                         trans  = "identity",
-                         labels = percent,
-                         alpha  = .4) +
-    theme_void() +
-    theme(legend.position = "none")
-  
-  ggsave(plot = my_plot,
-         filename = glue("{output_path}Map of Base Year {save_label}_{my_output_tag}.png"),
-         #width = 7,
-         height = 7,
-         units = "in")
-  
-  print(my_plot)
-}
-```
+<!-- ```{r check the results -- final_bounded versus acs5, eval = developer_mode} -->
+<!-- # This is done to see if we obtain something relatively close to the 45 -->
+<!-- check_redis_sae %>%  -->
+<!--   ggplot(aes(x = share_acs5, -->
+<!--              y = share_model_redis_pct01_infl)) + -->
+<!--   geom_abline() +  -->
+<!--   geom_point(alpha = 0.1) +  -->
+<!--   geom_smooth() + -->
+<!--   geom_hline(yintercept = 0, color = "red") + -->
+<!--   geom_hline(yintercept = 1, color = "red") + -->
+<!--   facet_wrap(~vc_value) -->
 
+<!-- check_redis_sae %>%  -->
+<!--   ggplot(aes(x = share_model_redis_pct, -->
+<!--              y = share_model_redis_pct01_infl)) + -->
+<!--   geom_abline() +  -->
+<!--   geom_point(alpha = 0.1) + -->
+<!--   geom_smooth() + -->
+<!--   geom_hline(yintercept = 0, color = "red") + -->
+<!--   geom_hline(yintercept = 1, color = "red") + -->
+<!--   facet_wrap(~vc_value) -->
 
-```{r set value scales}
-limits_05  <- range(with(tractShp_pov, c(acs1_pov_05)),  # sae_pov_fh_05, sae_pov_model_05
-                    na.rm = TRUE)
-limits_612 <- range(with(tractShp_pov, c(acs1_pov_612)), # sae_pov_fh_612, sae_pov_model_612
-                    na.rm = TRUE)
-```
+<!-- # Check the correlations between each adjustment type and the acs5 -- seems that -->
+<!-- # the pct adjustment -- despite violating [0,1] bounds -- respects -->
 
-```{r generate maps}
-# /!\ Look into why some geographies are displaying as "NA". Must of course do with underlying data
-# In Chicago, O'Hare is a valid missing. However, others shouldn't be.
-# /*\ It may be desirable to filter these maps to a sub-state geography because,
-# at the state level, more dense areas are simultaneously often those with higher
-# poverty values, and also areas that won't show up clearly on a state-wide map
-my_dt <- tractShp_pov #%>% filter(str_detect(GEOID, "17031"))
+<!-- check_redis_sae %>%  -->
+<!--   group_by(vc_value) %>%  -->
+<!--   summarize(cor_acs5_pct = cor(share_acs5,            share_model_redis_pct01_infl, use = "pairwise"), -->
+<!--             cor_acs5_log = cor(share_model_redis_pct, share_model_redis_pct01_infl, use = "pairwise")) -->
+<!--   # True -- they are often clearly better. This is never mind the fact that the  -->
+<!--   # slopes of the former are also closer to 1. -->
+<!-- ``` -->
 
-map_sae_components(my_dt, "acs1_pov_05",      "", val_limits = limits_05, save_label = "Poverty (ACS1), age 0-5")
-map_sae_components(my_dt, "acs5_pov",         "", val_limits = limits_05, save_label = "Poverty (ACS5), age 0-5")
-map_sae_components(my_dt, "sae_pov_model_05", "", val_limits = limits_05, save_label = "Poverty (SAE), age 0-5")
+<!-- ```{r how does the adjusted values compare with the original, eval = developer_mode} -->
+<!-- check_redis_sae %>%  -->
+<!--   ggplot(aes(x = share_model_trunc, -->
+<!--              y = share_model_redis_pct01_infl)) + -->
+<!--   geom_abline() +  -->
+<!--   geom_point(alpha = 0.1) + -->
+<!--   geom_smooth() + -->
+<!--   facet_wrap(~vc_value) -->
+<!--   # In short -- on average, they're close to the 45 -->
 
-```
+<!-- ``` -->
 
-```{r build comparison of selected SAE with ACS1, eval = developer_mode}
-# Build 
-(puma_agg_sae <- 
-  sae_results_ccdf_wk_pov_05$sae_out %>% 
-   as.data.table() %>%
-  .[j = PUMA := as.numeric(PUMA)] %>% 
-  .[str_detect(vc_value, "^WorkElig_(0%|75%|150%).+"),
-    .(n_p = sum(n_pt),
-      n_p_elig    = sum(vc_count),
-      n_p_elig_fh    = sum(vc_fh_count_trunc),
-      n_p_elig_model = sum(vc_model_count_trunc)),
-    by = PUMA] %>% 
-  .[j = `:=`(pct_elig       = n_p_elig       / n_p,
-             pct_elig_fh    = n_p_elig_fh    / n_p,
-             pct_elig_model = n_p_elig_model / n_p)] %>% 
-   arrange(PUMA) %>% 
-  select(PUMA, n_sae = n_p, 
-         n_ccap_elig_fh = n_p_elig_fh, 
-         n_ccap_elig_model = n_p_elig_model,
-         pct_ccap_elig       = pct_elig,
-         pct_ccap_elig_fh    = pct_elig_fh, 
-         pct_ccap_elig_model = pct_elig_model))
-  # aggregate counts across vc_values and puma
-  # compare with puma aggregate calcs
+<!-- ```{r examine distributions and correlations of original and final SAE vs acs5} -->
+<!-- comp_plot <- function(field1, field2) { -->
+<!--   check_redis_sae %>%  -->
+<!--   filter(!is.na(get(field1)), -->
+<!--          !is.na(get(field2))) %>%  -->
+<!--   ggplot(aes(x = get(field1), -->
+<!--              y = get(field2))) + -->
+<!--   geom_abline() +  -->
+<!--   geom_point(alpha = 0.1) + -->
+<!--   geom_smooth() +  -->
+<!--   scale_y_continuous(limits = c(0, 1)) + -->
+<!--   labs(x = field1, y = field2) + -->
+<!--   facet_wrap(~vc_value) -->
+<!-- } -->
 
-(puma_agg_acs1 <- 
-   acs1_elig[between(AGEP, 0, 5),
-              .(sample_n = .N,
-                n_acs1 = sum(PWGTP),
-                  n_lt225fpl         = sum(PWGTP[fam_incpov_ratio <= 2.25]),
-                pct_lt225fpl         = sum(PWGTP[fam_incpov_ratio <= 2.25]) / sum(PWGTP),
-                  n_lt225fpl_worksch = sum(PWGTP[fam_incpov_ratio <= 2.25 & bAdults_all_workThresh_sch == 1]),
-                pct_lt225fpl_worksch = sum(PWGTP[fam_incpov_ratio <= 2.25 & bAdults_all_workThresh_sch == 1]) / sum(PWGTP)),
-              by = .(PUMA = as.numeric(PUMA))] %>% 
-   arrange(PUMA))
+<!-- comp_plot("share_acs5", "share_model_trunc") -->
+<!-- comp_plot("share_acs5", "share_model_redis_pct") -->
+<!-- comp_plot("share_acs5", "share_model_redis_pct01_infl") -->
 
-puma_agg_comp <- 
-  merge(puma_agg_acs1,
-        puma_agg_sae,
-        by = "PUMA")
-```
+<!-- check_redis_sae %>%  -->
+<!--   group_by(vc_value) %>%  -->
+<!--   summarize(cor_acs5_sae  = cor(share_acs5, share_model_trunc,            use = "pairwise") %>% round(3), -->
+<!--             cor_acs5_pct = cor(share_acs5, share_model_redis_pct, use = "pairwise") %>% round(3), -->
+<!--             cor_acs5_infl = cor(share_acs5, share_model_redis_pct01_infl, use = "pairwise") %>% round(3), -->
 
+<!--             var_acs5 = varNA(share_acs5) %>% round(3), -->
+<!--             var_sae  = varNA(share_model_trunc) %>% round(3), -->
+<!--             var_pct = varNA(share_model_redis_pct) %>% round(3), -->
+<!--             var_infl = varNA(share_model_redis_pct01_infl) %>% round(3)) %>%  -->
+<!--   ungroup() -->
+<!--   # Shows that correlations have dropped somewhat with each manipulation, but  -->
+<!--   # the variances are substantially more realistic, which is critical -->
+<!--   # Note -- these comparisons don't capture the greater alignment with ACS 1 -->
+<!-- ``` -->
 
-```{r visualize comparison of selected SAE with ACS1, eval = developer_mode}
-# Compare counts
-plot_puma_aggs_ns <- 
-  ggplot(puma_agg_comp,
-       aes(x = n_lt225fpl_worksch,
-           group = PUMA)) +
-  geom_point(aes(y = n_ccap_elig_fh),
-             color = "blue") +
-  geom_point(aes(y = n_ccap_elig_model),
-             color = "green") +
-  geom_point(data = puma_agg_comp %>% filter(PUMA == 02100),
-             aes(y = n_ccap_elig_fh),
-             color = "orange") +
-  geom_point(data = puma_agg_comp %>% filter(PUMA == 02100),
-             aes(y = n_ccap_elig_model),
-             color = "red") +
-  geom_abline() +
-  scale_x_continuous(limits = c(0, NA)) +
-  scale_y_continuous(limits = c(0, NA)) +
-  theme_minimal()
+<!-- ```{r check final accordance with PUMA-level statistics, eval = developer_mode} -->
+<!-- # Here, we calculate population-weighted averages, for comparison with PUMA-level -->
+<!-- # averages directly from the ACS 1 -->
+<!-- est_vs_acs1 <-  -->
+<!--   check_redis_sae %>%  -->
+<!--   ungroup() %>% -->
+<!--   select(GEOID, PUMA, vc_value, pop,  -->
+<!--          share_acs5, share_model_trunc, share_model_redis_pct, -->
+<!--          share_model_redis_pct01_infl) %>%  -->
+<!--   pivot_longer(cols = -c(GEOID, PUMA, vc_value, pop), -->
+<!--                names_to = "method", -->
+<!--                values_to = "estimate") %>%  -->
+<!--   group_by(PUMA, vc_value, method) %>%  -->
+<!--   summarize( -->
+<!--     # Checking: this should be unique -->
+<!--     estimate_puma = weighted.mean(x = estimate, w = pop) -->
+<!--     ) %>%  -->
+<!--   mutate( -->
+<!--     method = factor(method, -->
+<!--                     levels = c("share_acs5",  -->
+<!--                                "share_model_trunc",  -->
+<!--                                "share_model_redis_pct", -->
+<!--                                "share_model_redis_pct01_infl")) -->
+<!--   ) %>%  -->
+<!--   merge(check_stats_puma, -->
+<!--         by = c("PUMA", "vc_value")) -->
 
-ggplotly(plot_puma_aggs_ns, tooltip = "group")
+<!-- ggplot(est_vs_acs1, -->
+<!--        aes(x = share_acs1, -->
+<!--            y = estimate_puma, -->
+<!--            color = method)) + -->
+<!--   geom_abline() +  -->
+<!--   geom_point() +  -->
+<!--   geom_smooth() + -->
+<!--   facet_grid(vc_value ~ method) + -->
+<!--   theme(legend.position = "bottom") -->
 
-# Compare shares
-plot_puma_aggs_pcts <- 
-  ggplot(puma_agg_comp,
-       aes(x = pct_lt225fpl_worksch,
-           group = PUMA)) +
-  geom_point(aes(y = pct_ccap_elig),
-             color = "black") +
-  geom_point(aes(y = pct_ccap_elig_fh),
-             color = "blue") +
-  geom_point(aes(y = pct_ccap_elig_model),
-             color = "green") +
-  geom_point(data = puma_agg_comp %>% filter(PUMA == 02100),
-             aes(y = pct_ccap_elig_fh),
-             color = "orange") +
-  geom_point(data = puma_agg_comp %>% filter(PUMA == 02100),
-             aes(y = pct_ccap_elig_model),
-             color = "red") +
-  geom_abline() +
-  scale_x_continuous(limits = c(0, NA)) +
-  scale_y_continuous(limits = c(0, NA)) +
-  theme_minimal()
+<!--   # ACS5 (red) is inconsistent -- which makes sense because they are lagged! -->
+<!--   # The original SAE estimates (yellow) show clear compression -->
+<!--   # The raw redistributed estimates (green) are highly consistent for each band -->
+<!--   # The truncated/reinflated estimates (blue) are also highly consistent for -->
+<!--   #   each band, but of course also respect 0% floor and 100% ceiling for each  -->
+<!--   #   tract. Seem that this advantage did not create problems for PUMA-level  -->
+<!--   #   aggregates. -->
+<!--   # The estimates taken directly from the ACS5 (purple) are also impressively  -->
+<!--   #   consistent with the ACS1 -->
 
-ggplotly(plot_puma_aggs_pcts, tooltip = "group")
-
-```
+<!-- ``` -->
 
 
-```{r check consistency of base population measures, eval = developer_mode}
-# /!\ Consider moving this to 01e if it's interesting
-
-puma_agg_pop <- 
-  pop_by_age %>% 
-  rename(GEOID = GEOID_TR20) %>% 
-  merge(geo_crosswalk[j = .(GEOID, PUMA = as.numeric(PUMA))] %>% unique(),
-        by = "GEOID") %>% 
-  as.data.table() %>% 
-  .[year == base_year,
-    j = .(n_pop = sum(age_0to5_count)),
-    by = PUMA] %>% 
-  arrange(PUMA)
-
-puma_agg_comp_pop <- 
-  puma_agg_comp %>% 
-  merge(puma_agg_pop,
-        by = "PUMA")
-
-plot_puma_pops <- 
-  ggplot(puma_agg_comp_pop,
-         aes(x = n_acs1,
-             y = n_pop,
-             group = PUMA)) +
-  geom_point() + 
-  geom_point(data = puma_agg_comp_pop %>% filter(PUMA == "02100"),
-             color = "red") + 
-  geom_abline() +
-  scale_x_continuous(limits = c(0, NA)) +
-  scale_y_continuous(limits = c(0, NA)) +
-  theme_minimal()
+<!-- #### Compare Tract-Level SAE Estimates to the ACS 5-year -->
 
 
-ggplotly(plot_puma_pops, tooltip = "group")
-```
+<!-- ```{r compare measure variance in acs5 vs sae by PUMA, eval = developer_mode} -->
+<!-- var_prop_acs5_sae <-  -->
+<!--   sae_results_incpov_ctrls_100_05$sae_out %>%  -->
+<!--   filter(vc_value == "0%-100%") %>%  -->
+<!--   mutate(acs5_pov = incpov_lt6_r0to50_est + incpov_lt6_r50to100_est) %>%  -->
+<!--   group_by(PUMA) %>%  -->
+<!--   summarize(var_acs5_pov = varNA(acs5_pov), -->
+<!--             var_sae_pov  = varNA(share_model_trunc), -->
+<!--             avg_acs5_pov = meanNA(acs5_pov), -->
+<!--             avg_sae_pov  = meanNA(share_model_trunc)) %>%  -->
+<!--   mutate(ratio_var_acs5_sae = var_acs5_pov / var_sae_pov) -->
 
-```{r investigate the amount of noise in the ACS1 sample}
-# The counts of young children (age 0-5) are very low
-acs1_elig[between(AGEP, 0, 5), 
-           .N, 
-           by = PUMA] %>% 
-  .[order(PUMA)] %>% 
-  ggplot(aes(x = N)) + 
-  geom_histogram() +
-  labs(title = "")
+<!-- ggplot(var_prop_acs5_sae, -->
+<!--        aes(x = reorder(PUMA, ratio_var_acs5_sae), -->
+<!--            y = ratio_var_acs5_sae)) +  -->
+<!--   geom_bar(stat = "identity") + -->
+<!--   geom_hline(yintercept = 1,  -->
+<!--              color = "red") + -->
+<!--   labs(x = "PUMA", -->
+<!--        y = "Ratio of ACS5 Variance to SAE") + -->
+<!--   theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) -->
 
-# Bootstrapping values for each PUMA
-```
+<!-- ggplot(var_prop_acs5_sae, -->
+<!--        aes(x = avg_acs5_pov, -->
+<!--            y = ratio_var_acs5_sae, -->
+<!--            label = PUMA)) +  -->
+<!--   geom_point() +  -->
+<!--   geom_text(vjust = 1) + -->
+<!--   labs(x = "ACS5 Poverty Rate", -->
+<!--        y = "Ratio of ACS5 Variance to SAE") + -->
+<!--   theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) -->
+
+<!-- ggplot(var_prop_acs5_sae, -->
+<!--        aes(x = avg_acs5_pov, -->
+<!--            y = avg_sae_pov, -->
+<!--            label = PUMA)) +  -->
+<!--   geom_point() +  -->
+<!--   geom_abline() + -->
+<!--   geom_text(vjust = 1) + -->
+<!--   labs(title = "Comparison of PUMA-Level ACS5 and SAE Estimates (Simple averages)", -->
+<!--          x = "ACS5 Poverty Rate", -->
+<!--        y = "SAE Poverty Rate") + -->
+<!--   theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) -->
+<!--   # NOTE -- this isn't what we're worried about. We're worried about the ACS1 comparison. -->
+<!--   # See e.g. acs1_elig[between(AGEP, 0, 5), j = sum(PWGTP[fam_incpov_ratio_cat_by100 == "0%-100%"])/sum(PWGTP), by = PUMA] -->
+<!-- ``` -->
+
+
+
+<!-- #### Map Components of the SAE Estimates -->
+
+<!-- ```{r set up comparisons of data} -->
+<!-- pov_p <-  -->
+<!--   lapply(c("05", "612"), -->
+<!--          function(a) { -->
+<!--            get(glue("sae_results_incpov_ctrls_mix_{a}"))$sae_out %>%  -->
+<!--              filter(vc_value %in% c("0%-50%", "50%-100%")) %>%  -->
+<!--              group_by(GEOID) %>%  -->
+<!--              summarize(acs1_pov       = sum(share_direct), -->
+<!--                        sae_pov_fh     = sum(share_fh_trunc), -->
+<!--                        sae_pov_model  = sum(share_model_trunc)) -->
+<!--          } -->
+<!--   ) -->
+
+<!-- tractShp_pov <-  -->
+<!--   tractShp %>%  -->
+<!--   left_join(pov_p[[1]] %>% rename(acs1_pov_05      = acs1_pov, -->
+<!--                                   sae_pov_fh_05    = sae_pov_fh, -->
+<!--                                   sae_pov_model_05 = sae_pov_model), -->
+<!--             by = "GEOID") %>%  -->
+<!--   left_join(pov_p[[2]] %>% rename(acs1_pov_612      = acs1_pov, -->
+<!--                                   sae_pov_fh_612    = sae_pov_fh, -->
+<!--                                   sae_pov_model_612 = sae_pov_model), -->
+<!--             by = "GEOID") %>%  -->
+<!--   left_join(acs5tract %>% select(GEOID, acs5_pov = incpov_r0to100_est), -->
+<!--             by = "GEOID") -->
+
+<!-- ``` -->
+
+<!-- ```{r set color scale} -->
+<!-- map_sae_components <- function(dt, fill_field, field_label, val_limits, save_label) { -->
+
+<!--   pumas_to_keep <- -->
+<!--     geo_crosswalk[GEOID %in% dt$GEOID] %>%  -->
+<!--     .[["PUMA"]] %>%  -->
+<!--     unique() -->
+
+<!--   pumaShp_sub <- -->
+<!--     pumaShp %>%  -->
+<!--     filter(PUMA %in% pumas_to_keep) -->
+
+<!--   my_plot <-  -->
+<!--     ggplot() + -->
+<!--     geom_sf(data = dt, -->
+<!--             aes_string(fill = fill_field), -->
+<!--             linewidth = 0.025, -->
+<!--             color = "black") + -->
+<!--     geom_sf(data = pumaShp_sub, -->
+<!--             color = "red", -->
+<!--             linewidth = 0.75, -->
+<!--             fill = NA) + -->
+<!--     scale_fill_viridis_c(name   = field_label, -->
+<!--                          limits = val_limits, -->
+<!--                          option = "viridis", #"plasma", #  -->
+<!--                          trans  = "identity", -->
+<!--                          labels = percent, -->
+<!--                          alpha  = .4) + -->
+<!--     theme_void() + -->
+<!--     theme(legend.position = "none") -->
+
+<!--   ggsave(plot = my_plot, -->
+<!--          filename = glue("{output_path}Map of Base Year {save_label}_{my_output_tag}.png"), -->
+<!--          #width = 7, -->
+<!--          height = 7, -->
+<!--          units = "in") -->
+
+<!--   print(my_plot) -->
+<!-- } -->
+<!-- ``` -->
+
+
+<!-- ```{r set value scales} -->
+<!-- limits_05  <- range(with(tractShp_pov, c(acs1_pov_05)),  # sae_pov_fh_05, sae_pov_model_05 -->
+<!--                     na.rm = TRUE) -->
+<!-- limits_612 <- range(with(tractShp_pov, c(acs1_pov_612)), # sae_pov_fh_612, sae_pov_model_612 -->
+<!--                     na.rm = TRUE) -->
+<!-- ``` -->
+
+<!-- ```{r generate maps} -->
+<!-- # /!\ Look into why some geographies are displaying as "NA". Must of course do with underlying data -->
+<!-- # In Chicago, O'Hare is a valid missing. However, others shouldn't be. -->
+<!-- # /*\ It may be desirable to filter these maps to a sub-state geography because, -->
+<!-- # at the state level, more dense areas are simultaneously often those with higher -->
+<!-- # poverty values, and also areas that won't show up clearly on a state-wide map -->
+<!-- my_dt <- tractShp_pov #%>% filter(str_detect(GEOID, "17031")) -->
+
+<!-- map_sae_components(my_dt, "acs1_pov_05",      "", val_limits = limits_05, save_label = "Poverty (ACS1), age 0-5") -->
+<!-- map_sae_components(my_dt, "acs5_pov",         "", val_limits = limits_05, save_label = "Poverty (ACS5), age 0-5") -->
+<!-- map_sae_components(my_dt, "sae_pov_model_05", "", val_limits = limits_05, save_label = "Poverty (SAE), age 0-5") -->
+
+<!-- ``` -->
+
+<!-- ```{r build comparison of selected SAE with ACS1, eval = developer_mode} -->
+<!-- # Build  -->
+<!-- (puma_agg_sae <-  -->
+<!--   sae_results_ccdf_wk_pov_05$sae_out %>%  -->
+<!--    as.data.table() %>% -->
+<!--   .[j = PUMA := as.numeric(PUMA)] %>%  -->
+<!--   .[str_detect(vc_value, "^WorkElig_(0%|75%|150%).+"), -->
+<!--     .(n_p = sum(n_pt), -->
+<!--       n_p_elig    = sum(vc_count), -->
+<!--       n_p_elig_fh    = sum(vc_fh_count_trunc), -->
+<!--       n_p_elig_model = sum(vc_model_count_trunc)), -->
+<!--     by = PUMA] %>%  -->
+<!--   .[j = `:=`(pct_elig       = n_p_elig       / n_p, -->
+<!--              pct_elig_fh    = n_p_elig_fh    / n_p, -->
+<!--              pct_elig_model = n_p_elig_model / n_p)] %>%  -->
+<!--    arrange(PUMA) %>%  -->
+<!--   select(PUMA, n_sae = n_p,  -->
+<!--          n_ccap_elig_fh = n_p_elig_fh,  -->
+<!--          n_ccap_elig_model = n_p_elig_model, -->
+<!--          pct_ccap_elig       = pct_elig, -->
+<!--          pct_ccap_elig_fh    = pct_elig_fh,  -->
+<!--          pct_ccap_elig_model = pct_elig_model)) -->
+<!--   # aggregate counts across vc_values and puma -->
+<!--   # compare with puma aggregate calcs -->
+
+<!-- (puma_agg_acs1 <-  -->
+<!--    acs1_elig[between(AGEP, 0, 5), -->
+<!--               .(sample_n = .N, -->
+<!--                 n_acs1 = sum(PWGTP), -->
+<!--                   n_lt225fpl         = sum(PWGTP[fam_incpov_ratio <= 2.25]), -->
+<!--                 pct_lt225fpl         = sum(PWGTP[fam_incpov_ratio <= 2.25]) / sum(PWGTP), -->
+<!--                   n_lt225fpl_worksch = sum(PWGTP[fam_incpov_ratio <= 2.25 & bAdults_all_workThresh_sch == 1]), -->
+<!--                 pct_lt225fpl_worksch = sum(PWGTP[fam_incpov_ratio <= 2.25 & bAdults_all_workThresh_sch == 1]) / sum(PWGTP)), -->
+<!--               by = .(PUMA = as.numeric(PUMA))] %>%  -->
+<!--    arrange(PUMA)) -->
+
+<!-- puma_agg_comp <-  -->
+<!--   merge(puma_agg_acs1, -->
+<!--         puma_agg_sae, -->
+<!--         by = "PUMA") -->
+<!-- ``` -->
+
+
+<!-- ```{r visualize comparison of selected SAE with ACS1, eval = developer_mode} -->
+<!-- # Compare counts -->
+<!-- plot_puma_aggs_ns <-  -->
+<!--   ggplot(puma_agg_comp, -->
+<!--        aes(x = n_lt225fpl_worksch, -->
+<!--            group = PUMA)) + -->
+<!--   geom_point(aes(y = n_ccap_elig_fh), -->
+<!--              color = "blue") + -->
+<!--   geom_point(aes(y = n_ccap_elig_model), -->
+<!--              color = "green") + -->
+<!--   geom_point(data = puma_agg_comp %>% filter(PUMA == 02100), -->
+<!--              aes(y = n_ccap_elig_fh), -->
+<!--              color = "orange") + -->
+<!--   geom_point(data = puma_agg_comp %>% filter(PUMA == 02100), -->
+<!--              aes(y = n_ccap_elig_model), -->
+<!--              color = "red") + -->
+<!--   geom_abline() + -->
+<!--   scale_x_continuous(limits = c(0, NA)) + -->
+<!--   scale_y_continuous(limits = c(0, NA)) + -->
+<!--   theme_minimal() -->
+
+<!-- ggplotly(plot_puma_aggs_ns, tooltip = "group") -->
+
+<!-- # Compare shares -->
+<!-- plot_puma_aggs_pcts <-  -->
+<!--   ggplot(puma_agg_comp, -->
+<!--        aes(x = pct_lt225fpl_worksch, -->
+<!--            group = PUMA)) + -->
+<!--   geom_point(aes(y = pct_ccap_elig), -->
+<!--              color = "black") + -->
+<!--   geom_point(aes(y = pct_ccap_elig_fh), -->
+<!--              color = "blue") + -->
+<!--   geom_point(aes(y = pct_ccap_elig_model), -->
+<!--              color = "green") + -->
+<!--   geom_point(data = puma_agg_comp %>% filter(PUMA == 02100), -->
+<!--              aes(y = pct_ccap_elig_fh), -->
+<!--              color = "orange") + -->
+<!--   geom_point(data = puma_agg_comp %>% filter(PUMA == 02100), -->
+<!--              aes(y = pct_ccap_elig_model), -->
+<!--              color = "red") + -->
+<!--   geom_abline() + -->
+<!--   scale_x_continuous(limits = c(0, NA)) + -->
+<!--   scale_y_continuous(limits = c(0, NA)) + -->
+<!--   theme_minimal() -->
+
+<!-- ggplotly(plot_puma_aggs_pcts, tooltip = "group") -->
+
+<!-- ``` -->
+
+
+<!-- ```{r check consistency of base population measures, eval = developer_mode} -->
+<!-- # /!\ Consider moving this to 01e if it's interesting -->
+
+<!-- puma_agg_pop <-  -->
+<!--   pop_by_age %>%  -->
+<!--   rename(GEOID = GEOID_TR20) %>%  -->
+<!--   merge(geo_crosswalk[j = .(GEOID, PUMA = as.numeric(PUMA))] %>% unique(), -->
+<!--         by = "GEOID") %>%  -->
+<!--   as.data.table() %>%  -->
+<!--   .[year == base_year, -->
+<!--     j = .(n_pop = sum(age_0to5_count)), -->
+<!--     by = PUMA] %>%  -->
+<!--   arrange(PUMA) -->
+
+<!-- puma_agg_comp_pop <-  -->
+<!--   puma_agg_comp %>%  -->
+<!--   merge(puma_agg_pop, -->
+<!--         by = "PUMA") -->
+
+<!-- plot_puma_pops <-  -->
+<!--   ggplot(puma_agg_comp_pop, -->
+<!--          aes(x = n_acs1, -->
+<!--              y = n_pop, -->
+<!--              group = PUMA)) + -->
+<!--   geom_point() +  -->
+<!--   geom_point(data = puma_agg_comp_pop %>% filter(PUMA == "02100"), -->
+<!--              color = "red") +  -->
+<!--   geom_abline() + -->
+<!--   scale_x_continuous(limits = c(0, NA)) + -->
+<!--   scale_y_continuous(limits = c(0, NA)) + -->
+<!--   theme_minimal() -->
+
+
+<!-- ggplotly(plot_puma_pops, tooltip = "group") -->
+<!-- ``` -->
+
+<!-- ```{r investigate the amount of noise in the ACS1 sample} -->
+<!-- # The counts of young children (age 0-5) are very low -->
+<!-- acs1_elig[between(AGEP, 0, 5),  -->
+<!--            .N,  -->
+<!--            by = PUMA] %>%  -->
+<!--   .[order(PUMA)] %>%  -->
+<!--   ggplot(aes(x = N)) +  -->
+<!--   geom_histogram() + -->
+<!--   labs(title = "") -->
+
+<!-- # Bootstrapping values for each PUMA -->
+<!-- ``` -->
 

@@ -272,152 +272,152 @@ share_pre_post <-
   )
 ```
 
-### Map Now-cast Estimates
+<!-- ### Map Now-cast Estimates -->
 
-```{r generate maps for now-cast estimates, fig.height = 12}
-tractShp %>% 
-  merge(share_pre_post, 
-        by = "GEOID") %>%
-  #filter(outcome_var %like% "le50",
-  filter(grepl(paste("le50|le100|", local_ccdf_incratio_base, "$", sep = ""), outcome_var),
-         cps_base_recency == "most_recent",
-         age == "age_0to5") %>%
-  ggplot(aes(fill = share_nowcast)) +
-  geom_sf(color = NA) +
-  facet_wrap(~ outcome_var) +
-  theme_void() +
-  theme(strip.text = element_text(size = 14))
+<!-- ```{r generate maps for now-cast estimates, fig.height = 12} -->
+<!-- tractShp %>%  -->
+<!--   merge(share_pre_post,  -->
+<!--         by = "GEOID") %>% -->
+<!--   #filter(outcome_var %like% "le50", -->
+<!--   filter(grepl(paste("le50|le100|", local_ccdf_incratio_base, "$", sep = ""), outcome_var), -->
+<!--          cps_base_recency == "most_recent", -->
+<!--          age == "age_0to5") %>% -->
+<!--   ggplot(aes(fill = share_nowcast)) + -->
+<!--   geom_sf(color = NA) + -->
+<!--   facet_wrap(~ outcome_var) + -->
+<!--   theme_void() + -->
+<!--   theme(strip.text = element_text(size = 14)) -->
 
-```
-
-
-
-### Examine Now-cast Estimates versus Base-Year (SAE) Estimates
-
-We compare now-cast estimates to baseline SAE estimates for only Head Start eligibility, because in the SAE estimates we do not currently estimate <50% as its own threshold, nor income measures directly connected to CCDF eligibility.
-
-```{r function to compare now-cast vs SAE}
-comp_nowcast_vs_sae <- function(share_ests, title, xlab, ylab, save_tag) {
-  
-  my_plot <- 
-    ggplot(share_ests %>% filter(cps_base_recency == "allbase"),
-           aes(x = share_base,
-               y = share_nowcast)) +
-    geom_point(alpha = 0.2) +
-    geom_abline(color = "red") +
-    geom_smooth(se = FALSE,
-                color = "blue") +
-    # facet_wrap(~ sae_spec) +
-    scale_x_continuous(labels = percent) +
-    scale_y_continuous(labels = percent) +
-    labs(title = title,
-         x = xlab,
-         y = ylab) +
-    theme_minimal() +
-    theme(legend.position = "bottom",
-          axis.text = element_text(size = 11))
-  
-  if (save_tag != "") {
-    ggsave(plot = my_plot,
-           filename = glue("{output_path}nowcast_vs_sae_{my_output_tag}_{save_tag}.png"))
-  }
-  
-  return(my_plot)
-}
-```
-
-```{r compare now-cast vs SAE for deep poverty}
-comp_nowcast_vs_sae(share_ests = share_pre_post %>% filter(str_detect(outcome_var, "incpov_le50")),
-                    title = case_when(my_output_tag == "IL" ~ "Tract-Level Now-Cast Estimates are Generally Above Baseline",
-                                      TRUE ~ ""),
-                    xlab = glue("Baseline (SAE) - {base_year}"),
-                    ylab = glue("Now-Cast - {base_year+1}"),
-                    save_tag = "incpov_le50")
-```
-
-```{r compare now-cast vs SAE for HS}
-comp_nowcast_vs_sae(share_ests = share_pre_post %>% filter(str_detect(outcome_var, "incpov_le100")),
-                    title = case_when(my_output_tag == "IL" ~ "Tract-Level Now-Cast Estimates are Generally Above Baseline",
-                                      TRUE ~ ""),
-                    xlab = glue("Baseline (SAE) - {base_year}"),
-                    ylab = glue("Now-Cast - {base_year+1}"),
-                    save_tag = "incpov_le100")
-```
-
-```{r compare now-cast vs SAE for CCAP}
-comp_nowcast_vs_sae(share_ests = share_pre_post %>% filter(str_detect(outcome_var, glue("{local_ccdf_incratio_base}$"))),
-                    title = case_when(my_output_tag == "IL" ~ "Tract-Level Now-Cast Estimates are Generally Above Baseline",
-                                      TRUE ~ ""),
-                    xlab = glue("Baseline (SAE) - {base_year}"),
-                    ylab = glue("Now-Cast - {base_year+1}"),
-                    save_tag = "ccdf_elig")
-```
+<!-- ``` -->
 
 
-```{r add community characteristics}
-share_pre_post_chars <- 
-  left_join(share_pre_post, 
-            acs5tract,
-            by = "GEOID")
-```
 
-```{r function to plot diffs vs community characteristics}
-plot_elig_diff_vs_char <- 
-  function(outcome_string,
-           outcome_desc,
-           char_field,
-           char_desc,
-           save_tag = "") {
-    dt_plot <-
-      share_pre_post_chars %>% 
-      filter(str_detect(outcome_var, outcome_string),
-             cps_base_recency == "allbase")
+<!-- ### Examine Now-cast Estimates versus Base-Year (SAE) Estimates -->
 
-    # If all y values are NAs--which can occur if the base share value has not
-    # been specified--then return 0 and exit
-    if (with(dt_plot, mean(is.na(share_nowcast - share_base)) == 1)) return(NULL)
+<!-- We compare now-cast estimates to baseline SAE estimates for only Head Start eligibility, because in the SAE estimates we do not currently estimate <50% as its own threshold, nor income measures directly connected to CCDF eligibility. -->
 
-    my_plot <- 
-      ggplot(dt_plot,
-             aes(x = get(char_field), # ed_lths
-                 y = share_nowcast - share_base)) +
-      geom_point(alpha = 0.2) +
-      geom_hline(yintercept = 0,
-                 color = "darkblue",
-                 linewidth = 0.75) +
-      geom_smooth(color = "red",
-                  se = FALSE) +
-      scale_x_continuous(label = percent) +
-      scale_y_continuous(label = percent) +
-      facet_wrap(~age) +
-      labs(x = char_desc,
-           y = glue("Change in {outcome_desc} - {base_year} to {base_year + 1}")) +
-      theme_minimal()
-    if (save_tag != "") {
-      ggsave(plot = my_plot,
-             filename = glue("{output_path}Difference in Eligibility in {outcome_desc} {save_tag}_{my_output_tag}.png"),
-             width = 6,
-             height = 4,
-             units = "in")
-    }
-    print(my_plot)
-  }
-```
+<!-- ```{r function to compare now-cast vs SAE} -->
+<!-- comp_nowcast_vs_sae <- function(share_ests, title, xlab, ylab, save_tag) { -->
+
+<!--   my_plot <-  -->
+<!--     ggplot(share_ests %>% filter(cps_base_recency == "allbase"), -->
+<!--            aes(x = share_base, -->
+<!--                y = share_nowcast)) + -->
+<!--     geom_point(alpha = 0.2) + -->
+<!--     geom_abline(color = "red") + -->
+<!--     geom_smooth(se = FALSE, -->
+<!--                 color = "blue") + -->
+<!--     # facet_wrap(~ sae_spec) + -->
+<!--     scale_x_continuous(labels = percent) + -->
+<!--     scale_y_continuous(labels = percent) + -->
+<!--     labs(title = title, -->
+<!--          x = xlab, -->
+<!--          y = ylab) + -->
+<!--     theme_minimal() + -->
+<!--     theme(legend.position = "bottom", -->
+<!--           axis.text = element_text(size = 11)) -->
+
+<!--   if (save_tag != "") { -->
+<!--     ggsave(plot = my_plot, -->
+<!--            filename = glue("{output_path}nowcast_vs_sae_{my_output_tag}_{save_tag}.png")) -->
+<!--   } -->
+
+<!--   return(my_plot) -->
+<!-- } -->
+<!-- ``` -->
+
+<!-- ```{r compare now-cast vs SAE for deep poverty} -->
+<!-- comp_nowcast_vs_sae(share_ests = share_pre_post %>% filter(str_detect(outcome_var, "incpov_le50")), -->
+<!--                     title = case_when(my_output_tag == "IL" ~ "Tract-Level Now-Cast Estimates are Generally Above Baseline", -->
+<!--                                       TRUE ~ ""), -->
+<!--                     xlab = glue("Baseline (SAE) - {base_year}"), -->
+<!--                     ylab = glue("Now-Cast - {base_year+1}"), -->
+<!--                     save_tag = "incpov_le50") -->
+<!-- ``` -->
+
+<!-- ```{r compare now-cast vs SAE for HS} -->
+<!-- comp_nowcast_vs_sae(share_ests = share_pre_post %>% filter(str_detect(outcome_var, "incpov_le100")), -->
+<!--                     title = case_when(my_output_tag == "IL" ~ "Tract-Level Now-Cast Estimates are Generally Above Baseline", -->
+<!--                                       TRUE ~ ""), -->
+<!--                     xlab = glue("Baseline (SAE) - {base_year}"), -->
+<!--                     ylab = glue("Now-Cast - {base_year+1}"), -->
+<!--                     save_tag = "incpov_le100") -->
+<!-- ``` -->
+
+<!-- ```{r compare now-cast vs SAE for CCAP} -->
+<!-- comp_nowcast_vs_sae(share_ests = share_pre_post %>% filter(str_detect(outcome_var, glue("{local_ccdf_incratio_base}$"))), -->
+<!--                     title = case_when(my_output_tag == "IL" ~ "Tract-Level Now-Cast Estimates are Generally Above Baseline", -->
+<!--                                       TRUE ~ ""), -->
+<!--                     xlab = glue("Baseline (SAE) - {base_year}"), -->
+<!--                     ylab = glue("Now-Cast - {base_year+1}"), -->
+<!--                     save_tag = "ccdf_elig") -->
+<!-- ``` -->
 
 
-```{r}
-plot_elig_diff_vs_char(outcome_string = "incpov_le100",
-                       outcome_desc   = "HS Eligibility", 
-                       char_field     = "raceeth_wh_nonh_est",
-                       char_desc      = "% White Non-Hisp in Tract",
-                       save_tag       = "by white residence")
-```
+<!-- ```{r add community characteristics} -->
+<!-- share_pre_post_chars <-  -->
+<!--   left_join(share_pre_post,  -->
+<!--             acs5tract, -->
+<!--             by = "GEOID") -->
+<!-- ``` -->
 
-```{r}
-plot_elig_diff_vs_char(outcome_string = glue("ccdf_elig_incratio_{local_ccdf_incratio_base}"),
-                       outcome_desc   = glue("{local_ccdf_name_short} Eligibility"), 
-                       char_field     = "raceeth_wh_nonh_est",
-                       char_desc      = "% White Non-Hisp in Tract",
-                       save_tag       = "by white residence")
-```
+<!-- ```{r function to plot diffs vs community characteristics} -->
+<!-- plot_elig_diff_vs_char <-  -->
+<!--   function(outcome_string, -->
+<!--            outcome_desc, -->
+<!--            char_field, -->
+<!--            char_desc, -->
+<!--            save_tag = "") { -->
+<!--     dt_plot <- -->
+<!--       share_pre_post_chars %>%  -->
+<!--       filter(str_detect(outcome_var, outcome_string), -->
+<!--              cps_base_recency == "allbase") -->
+
+<!--     # If all y values are NAs--which can occur if the base share value has not -->
+<!--     # been specified--then return 0 and exit -->
+<!--     if (with(dt_plot, mean(is.na(share_nowcast - share_base)) == 1)) return(NULL) -->
+
+<!--     my_plot <-  -->
+<!--       ggplot(dt_plot, -->
+<!--              aes(x = get(char_field), # ed_lths -->
+<!--                  y = share_nowcast - share_base)) + -->
+<!--       geom_point(alpha = 0.2) + -->
+<!--       geom_hline(yintercept = 0, -->
+<!--                  color = "darkblue", -->
+<!--                  linewidth = 0.75) + -->
+<!--       geom_smooth(color = "red", -->
+<!--                   se = FALSE) + -->
+<!--       scale_x_continuous(label = percent) + -->
+<!--       scale_y_continuous(label = percent) + -->
+<!--       facet_wrap(~age) + -->
+<!--       labs(x = char_desc, -->
+<!--            y = glue("Change in {outcome_desc} - {base_year} to {base_year + 1}")) + -->
+<!--       theme_minimal() -->
+<!--     if (save_tag != "") { -->
+<!--       ggsave(plot = my_plot, -->
+<!--              filename = glue("{output_path}Difference in Eligibility in {outcome_desc} {save_tag}_{my_output_tag}.png"), -->
+<!--              width = 6, -->
+<!--              height = 4, -->
+<!--              units = "in") -->
+<!--     } -->
+<!--     print(my_plot) -->
+<!--   } -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- plot_elig_diff_vs_char(outcome_string = "incpov_le100", -->
+<!--                        outcome_desc   = "HS Eligibility",  -->
+<!--                        char_field     = "raceeth_wh_nonh_est", -->
+<!--                        char_desc      = "% White Non-Hisp in Tract", -->
+<!--                        save_tag       = "by white residence") -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- plot_elig_diff_vs_char(outcome_string = glue("ccdf_elig_incratio_{local_ccdf_incratio_base}"), -->
+<!--                        outcome_desc   = glue("{local_ccdf_name_short} Eligibility"),  -->
+<!--                        char_field     = "raceeth_wh_nonh_est", -->
+<!--                        char_desc      = "% White Non-Hisp in Tract", -->
+<!--                        save_tag       = "by white residence") -->
+<!-- ``` -->
 

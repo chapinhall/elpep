@@ -532,335 +532,335 @@ save(
 )
 ```
 
-### Examine Estimated Betas from the Now-Casting
+<!-- ### Examine Estimated Betas from the Now-Casting -->
 
-We next examine estimated parameters from analysis of post-period measures the CPS.
+<!-- We next examine estimated parameters from analysis of post-period measures the CPS. -->
 
-```{r function to compare conditional and unconditional betas}
-compare_betas <- function(betas, title, subtitle, comp_var, comp_var_label, print_table = FALSE, save_tag = "") {
-  if (print_table) {
-    betas %>% 
-      arrange(trans_spec) %>% 
-      transmute(
-        Term = term, 
-        `Comp Var` = get(comp_var),
-        Estimate = round(estimate, 3),
-        `p-value` = round(p.value, 4)
-      ) %>% 
-      kable() %>% 
-      print()
-  }  
-  
-  if ("uncond" %in% betas$trans_spec) {
-    common_vars <- 
-      betas %>% 
-      filter(trans_spec == "uncond") %>% 
-      pull(term) %>% 
-      unique()  
-    betas <- 
-      filter(betas,
-             term %in% common_vars)
-  }
-  
-  betas <- 
-    betas %>% 
-    mutate(var_label = label_vars(term))
-  
-  my_plot <-
-    betas %>% 
-    ggplot(
-      aes_string(
-        x = "var_label",
-        y = "estimate",
-        fill = comp_var)
-    ) +
-    geom_bar(
-      stat = "identity",
-      position = "dodge"
-    ) +
-    geom_errorbar(
-      aes(
-        ymin = estimate - 1.96*std.error,
-        ymax = estimate + 1.96*std.error
-      ),
-      width = 0.1,
-      position = position_dodge(.9)
-    ) +
-    scale_fill_discrete(
-      name = comp_var_label
-      # breaks = c("cond", "uncond"),
-      # labels = c("Conditional", "Unconditional")
-    ) +
-    labs(
-      title = title,
-      subtitle = subtitle,
-      x = "",
-      y = "Estimated Coefficient"
-    ) +
-    coord_flip() + 
-    theme_minimal() +
-    theme(
-      axis.text = element_text(size = 11),
-      legend.position = "bottom"
-    )
-  
-  if (save_tag != "") {
-    ggsave(
-      plot = my_plot, 
-      filename = glue("{output_path}nowcasting_coefficients_{my_output_tag}_{save_tag}.png")
-    )
-  }
-  
-  return(my_plot)
-  
-}
-```
+<!-- ```{r function to compare conditional and unconditional betas} -->
+<!-- compare_betas <- function(betas, title, subtitle, comp_var, comp_var_label, print_table = FALSE, save_tag = "") { -->
+<!--   if (print_table) { -->
+<!--     betas %>%  -->
+<!--       arrange(trans_spec) %>%  -->
+<!--       transmute( -->
+<!--         Term = term,  -->
+<!--         `Comp Var` = get(comp_var), -->
+<!--         Estimate = round(estimate, 3), -->
+<!--         `p-value` = round(p.value, 4) -->
+<!--       ) %>%  -->
+<!--       kable() %>%  -->
+<!--       print() -->
+<!--   }   -->
 
-Comparing conditional vs unconditional estimates of SAE measures.
+<!--   if ("uncond" %in% betas$trans_spec) { -->
+<!--     common_vars <-  -->
+<!--       betas %>%  -->
+<!--       filter(trans_spec == "uncond") %>%  -->
+<!--       pull(term) %>%  -->
+<!--       unique()   -->
+<!--     betas <-  -->
+<!--       filter(betas, -->
+<!--              term %in% common_vars) -->
+<!--   } -->
 
-```{r compare now-casting betas, results = "asis"}
-compare_betas(
-  betas = 
-    filter(
-      nowcast_betas_out,
-      outcome_var       == "incpov_le100_post_adj",
-      sae_spec          == "incpov_ctrls_mix_05",
-      cps_base_recency  == "most_recent",
-      cps_geo_subsample == "none"
-    ),
-  title = "Now-Casting Coefficients Predicting Head Start Elig: Conditional vs Unconditional",
-  comp_var = "trans_spec",
-  comp_var_label = "Control Specification"
-)
-# Note -- this has limited value, since the choice of reference values for the
-  # conditional drives the comparison. This machinery may be more worth examining
-  # results for the same regression specification, but with different CPS subsets
+<!--   betas <-  -->
+<!--     betas %>%  -->
+<!--     mutate(var_label = label_vars(term)) -->
 
-compare_betas(
-  betas = 
-    filter(
-      nowcast_betas_out,
-      outcome_var      == "incpov_le100_post_adj",
-      sae_spec         == "incpov_ctrls_mix_05",
-      cps_base_recency == "most_recent",
-      trans_spec       == "cond"
-    ),
-  title = "Now-Casting Coefficients Predicting Head Start Elig: Comparison Across CPS Subsets",
-  subtitle = case_when(my_output_tag == "IL" ~ "",
-                       TRUE ~ ""),
-  comp_var = "cps_geo_subsample",
-  comp_var_label = "CPS Geographic Subset",
-  save_tag = "hs_comp-geo-subset"
-)
+<!--   my_plot <- -->
+<!--     betas %>%  -->
+<!--     ggplot( -->
+<!--       aes_string( -->
+<!--         x = "var_label", -->
+<!--         y = "estimate", -->
+<!--         fill = comp_var) -->
+<!--     ) + -->
+<!--     geom_bar( -->
+<!--       stat = "identity", -->
+<!--       position = "dodge" -->
+<!--     ) + -->
+<!--     geom_errorbar( -->
+<!--       aes( -->
+<!--         ymin = estimate - 1.96*std.error, -->
+<!--         ymax = estimate + 1.96*std.error -->
+<!--       ), -->
+<!--       width = 0.1, -->
+<!--       position = position_dodge(.9) -->
+<!--     ) + -->
+<!--     scale_fill_discrete( -->
+<!--       name = comp_var_label -->
+<!--       # breaks = c("cond", "uncond"), -->
+<!--       # labels = c("Conditional", "Unconditional") -->
+<!--     ) + -->
+<!--     labs( -->
+<!--       title = title, -->
+<!--       subtitle = subtitle, -->
+<!--       x = "", -->
+<!--       y = "Estimated Coefficient" -->
+<!--     ) + -->
+<!--     coord_flip() +  -->
+<!--     theme_minimal() + -->
+<!--     theme( -->
+<!--       axis.text = element_text(size = 11), -->
+<!--       legend.position = "bottom" -->
+<!--     ) -->
 
-compare_betas(
-  betas = 
-    filter(
-      nowcast_betas_out,
-      outcome_var       == "incpov_le100_post_adj",
-      sae_spec %in% c("incpov_ctrls_mix_05", "incpov_ctrls_mix_612"),
-      cps_base_recency  == "most_recent",
-      cps_geo_subsample == "none",
-      trans_spec        == "cond"
-    ),
-  title = "Now-Casting Coefficients Predicting Head Start Elig: Comparison Across Estimation for 0-5 vs 6-12",
-  subtitle = case_when(my_output_tag == "IL" ~ "",
-                       TRUE ~ ""),
-  comp_var = "sae_spec",
-  comp_var_label = "Age",
-  save_tag = "hs_comp-age05-vs-612"
-)
+<!--   if (save_tag != "") { -->
+<!--     ggsave( -->
+<!--       plot = my_plot,  -->
+<!--       filename = glue("{output_path}nowcasting_coefficients_{my_output_tag}_{save_tag}.png") -->
+<!--     ) -->
+<!--   } -->
 
-compare_betas(
-  betas = 
-    filter(
-      nowcast_betas_out,
-      outcome_var       == "incpov_le100_post_adj",
-      sae_spec          == "incpov_ctrls_mix_05",
-      cps_geo_subsample == "none",
-      trans_spec        == "cond"
-    ),
-  title = "Now-Casting Coefficients Predicting Head Start Elig: Comparison Across CPS Recency",
-  subtitle = case_when(my_output_tag == "IL" ~ "",
-                    TRUE ~ ""),
-  comp_var = "cps_base_recency",
-  comp_var_label = "CPS Base Recency",
-  save_tag = "hs_comp-cps-recency"
-)
+<!--   return(my_plot) -->
 
-compare_betas(
-  betas = 
-    filter(
-      nowcast_betas_out,
-      outcome_var       == glue("ccdf_elig_incratio_{local_ccdf_incratio_base}"),
-      sae_spec          == "ccdf_wk_pov_05",
-      cps_geo_subsample == "none",
-      trans_spec        == "cond"
-    ),
-  title = "IL" ~ "Comparison of Estimated CCDF Now-Casting Coefficients Across CPS Recency",
-  subtitle = case_when(my_output_tag == "IL" ~ "",
-                    TRUE ~ ""),
-  comp_var = "cps_base_recency",
-  comp_var_label = "CPS Base Recency",
-  save_tag = "ccdf_comp-base-recency"
-)
-```
+<!-- } -->
+<!-- ``` -->
 
+<!-- Comparing conditional vs unconditional estimates of SAE measures. -->
 
-### Examine Sensitivities via Direct Examination of Estimates
+<!-- ```{r compare now-casting betas, results = "asis"} -->
+<!-- compare_betas( -->
+<!--   betas =  -->
+<!--     filter( -->
+<!--       nowcast_betas_out, -->
+<!--       outcome_var       == "incpov_le100_post_adj", -->
+<!--       sae_spec          == "incpov_ctrls_mix_05", -->
+<!--       cps_base_recency  == "most_recent", -->
+<!--       cps_geo_subsample == "none" -->
+<!--     ), -->
+<!--   title = "Now-Casting Coefficients Predicting Head Start Elig: Conditional vs Unconditional", -->
+<!--   comp_var = "trans_spec", -->
+<!--   comp_var_label = "Control Specification" -->
+<!-- ) -->
+<!-- # Note -- this has limited value, since the choice of reference values for the -->
+<!--   # conditional drives the comparison. This machinery may be more worth examining -->
+<!--   # results for the same regression specification, but with different CPS subsets -->
 
-```{r generate functions for building and plotting comparisons of share estimates}
+<!-- compare_betas( -->
+<!--   betas =  -->
+<!--     filter( -->
+<!--       nowcast_betas_out, -->
+<!--       outcome_var      == "incpov_le100_post_adj", -->
+<!--       sae_spec         == "incpov_ctrls_mix_05", -->
+<!--       cps_base_recency == "most_recent", -->
+<!--       trans_spec       == "cond" -->
+<!--     ), -->
+<!--   title = "Now-Casting Coefficients Predicting Head Start Elig: Comparison Across CPS Subsets", -->
+<!--   subtitle = case_when(my_output_tag == "IL" ~ "", -->
+<!--                        TRUE ~ ""), -->
+<!--   comp_var = "cps_geo_subsample", -->
+<!--   comp_var_label = "CPS Geographic Subset", -->
+<!--   save_tag = "hs_comp-geo-subset" -->
+<!-- ) -->
 
-keep_cols <- c("GEOID", "cps_base_recency", "cps_geo_subsample", "sae_spec", "outcome_var")
+<!-- compare_betas( -->
+<!--   betas =  -->
+<!--     filter( -->
+<!--       nowcast_betas_out, -->
+<!--       outcome_var       == "incpov_le100_post_adj", -->
+<!--       sae_spec %in% c("incpov_ctrls_mix_05", "incpov_ctrls_mix_612"), -->
+<!--       cps_base_recency  == "most_recent", -->
+<!--       cps_geo_subsample == "none", -->
+<!--       trans_spec        == "cond" -->
+<!--     ), -->
+<!--   title = "Now-Casting Coefficients Predicting Head Start Elig: Comparison Across Estimation for 0-5 vs 6-12", -->
+<!--   subtitle = case_when(my_output_tag == "IL" ~ "", -->
+<!--                        TRUE ~ ""), -->
+<!--   comp_var = "sae_spec", -->
+<!--   comp_var_label = "Age", -->
+<!--   save_tag = "hs_comp-age05-vs-612" -->
+<!-- ) -->
 
-build_trans_sensitivity_comp <- function(data, comp_col, base_val) {
-  
-  # Note: we compare shares rather than counts, because the former is more directly
-  # model-related. The latter can get swamped by different sizes of tracts (and
-  # thus inflate correlations).
-  data_sub <- data[j = c(keep_cols, "elig_share", "elig_share_se"),
-                   with = FALSE]
-  
-  data_left <- 
-    data_sub[get(comp_col) == base_val] %>% 
-    select(-comp_col) %>% 
-    rename(elig_base    = elig_share,
-           elig_base_se = elig_share_se) %>% 
-    mutate(base = glue("{comp_col} == {base_val}"))
-  
-  comp <- 
-    data_left %>% 
-    merge(data_sub[get(comp_col) != base_val]) %>% 
-    .[j = `:=`(diff    = elig_share - elig_base,
-               diff_se = sqrt(elig_share_se^2 + elig_base_se^2))]
-  
-  return(comp)
-}
-   
-plot_trans_sensitivity_comp <- function(data, comp_col, base_val) {
-  
-  comp <- build_trans_sensitivity_comp(data, comp_col, base_val)
-  
-  comp %>% 
-    ggplot(
-      aes(
-        x = elig_base,
-        y = elig_share)
-    ) +
-    geom_point(
-      alpha = 0.1
-    ) +
-    geom_abline(
-      color = "blue"
-    ) +
-    scale_x_continuous(
-      labels = percent
-    ) +
-    scale_y_continuous(
-      labels = percent
-    ) +
-    facet_wrap(
-      as.formula(glue("~ {paste(setdiff(keep_cols, 'GEOID'), collapse = ' + ')}"))
-    ) +
-    labs(
-      x = base_val
-    ) +
-    theme_minimal()
-  
-}
-```
+<!-- compare_betas( -->
+<!--   betas =  -->
+<!--     filter( -->
+<!--       nowcast_betas_out, -->
+<!--       outcome_var       == "incpov_le100_post_adj", -->
+<!--       sae_spec          == "incpov_ctrls_mix_05", -->
+<!--       cps_geo_subsample == "none", -->
+<!--       trans_spec        == "cond" -->
+<!--     ), -->
+<!--   title = "Now-Casting Coefficients Predicting Head Start Elig: Comparison Across CPS Recency", -->
+<!--   subtitle = case_when(my_output_tag == "IL" ~ "", -->
+<!--                     TRUE ~ ""), -->
+<!--   comp_var = "cps_base_recency", -->
+<!--   comp_var_label = "CPS Base Recency", -->
+<!--   save_tag = "hs_comp-cps-recency" -->
+<!-- ) -->
 
-```{r compare SAE specifications for HS prediction}
-plot_trans_sensitivity_comp(
-  nowcast_out[outcome_var == "incpov_le100_post_adj" & cps_base_recency == "most_recent" & age == "age_0to5"],
-  comp_col = "sae_spec",
-  base_val = "incpov_ctrls_mix") +
-  labs(
-    x = "Full Income/Poverty Controls, with Employment Adjustment",
-    y = "Comparison Share Estimate"
-  )
-```
-
-```{r compare SAE specifications for CCAP prediction}
-# plot_trans_sensitivity_comp(nowcast_out[outcome_var == glue("ccdf_elig_incratio_{local_ccdf_incratio_base}") & age == "age_0to5"],
-#                             comp_col = "sae_spec",
-#                             base_val = "ccdf_wk_pov") +
-#   labs(title = case_when(my_output_tag == "IL" ~ "For CCDF Eligibility, Work and Spouse Specification consistently produces lower estimates",
-#                          TRUE ~ ""),
-#        x = "Specification: Work and Poverty",
-#        y = "Specification: Work and Spouse Present")
-```
-
-```{r compare CPS subsetting sensitivity for HS prediction - spec 1}
-plot_trans_sensitivity_comp(nowcast_out[outcome_var == "incpov_le100_post_adj" & sae_spec == "incpov_ctrls_mix" & age == "age_0to5"],
-                            comp_col = "cps_geo_subsample",
-                            base_val = "none") +
-  labs(title = case_when(my_output_tag == "IL" ~ "For Head Start, Sensitivities Seem Reasonably Consistent, Except for Simplest Spec",
-                         TRUE ~ ""),
-       x = "No CPS Subsampling",
-       y = "Use of only Metro Areas in CPS")
-```
-
-```{r compare CPS subsetting sensitivity for HS prediction - spec 2}
-plot_trans_sensitivity_comp(nowcast_out[outcome_var == "incpov_le100_post_adj" & sae_spec == "incpov_ctrls_mix" & age == "age_0to5"],
-                            comp_col = "cps_base_recency",
-                            base_val = "most_recent") +
-  labs(title = case_when(my_output_tag == "IL" ~ "For HS, Using the 2020 Baseline yields 25% lower eligibility estimates",
-                         TRUE ~ ""),
-       x = "Use of Most Recent CPS Months",
-       y = "Use of CPS 2020 Baseline")
-```
-
-```{r check correlations between SAE specifications for each other sensitivity}
-comp_sae <- 
-  build_trans_sensitivity_comp(nowcast_out[age == "age_0to5"],
-                               comp_col = "sae_spec",
-                               base_val = "incpov_ctrls_mix")
-
-comp_sae[j = .(rho = cor(elig_base, elig_share)),
-         by = .(sae_spec, outcome_var, cps_base_recency, cps_geo_subsample)] %>% 
-  .[order(rho)]
-```
-
-```{r scatterplot of differences and errors across specifications}
-ggplot(comp_sae[cps_base_recency == "most_recent" & cps_geo_subsample == "none"],
-       aes(x = elig_base,
-           y = diff,
-           color = sae_spec)) +
-  geom_point() +
-  geom_errorbar(aes(ymin = diff - 1.96*diff_se,
-                    ymax = diff + 1.96*diff_se),
-                width = .1) +
-  geom_hline(yintercept = 0) +
-  facet_wrap(~ sae_spec + outcome_var) +
-  labs(x = "Base Estimate",
-       y = "Diff: Spec vs Base",
-       title = case_when(my_output_tag == "IL" ~ "",
-                         TRUE ~ ""),
-       subtitle = "For most recent CPS cohorts") +
-  theme_minimal() +
-  theme(legend.position = "bottom")
-```
+<!-- compare_betas( -->
+<!--   betas =  -->
+<!--     filter( -->
+<!--       nowcast_betas_out, -->
+<!--       outcome_var       == glue("ccdf_elig_incratio_{local_ccdf_incratio_base}"), -->
+<!--       sae_spec          == "ccdf_wk_pov_05", -->
+<!--       cps_geo_subsample == "none", -->
+<!--       trans_spec        == "cond" -->
+<!--     ), -->
+<!--   title = "IL" ~ "Comparison of Estimated CCDF Now-Casting Coefficients Across CPS Recency", -->
+<!--   subtitle = case_when(my_output_tag == "IL" ~ "", -->
+<!--                     TRUE ~ ""), -->
+<!--   comp_var = "cps_base_recency", -->
+<!--   comp_var_label = "CPS Base Recency", -->
+<!--   save_tag = "ccdf_comp-base-recency" -->
+<!-- ) -->
+<!-- ``` -->
 
 
-<!-- By outcome and method, which are statistically different from the "by 100%" with detailed controls? -->
+<!-- ### Examine Sensitivities via Direct Examination of Estimates -->
 
-```{r calculate percent of statistical differences between methods}
-comp_sae[j = .(pct_diff_stat_sig = mean(abs(diff/diff_se) > 1.96) %>% percent()),
-                     by = .(sae_spec, outcome_var, cps_base_recency, cps_geo_subsample)]
-```
+<!-- ```{r generate functions for building and plotting comparisons of share estimates} -->
 
-<!-- How do the methods compare with respect to standard errors? -->
+<!-- keep_cols <- c("GEOID", "cps_base_recency", "cps_geo_subsample", "sae_spec", "outcome_var") -->
 
-```{r}
-ggplot(comp_sae,
-       aes(x = sae_spec,
-           y = elig_share_se,
-           color = sae_spec)) +
-  #geom_violin() +
-  geom_boxplot() +
-  facet_grid(~ outcome_var,
-             scales = "free") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90))
-```
+<!-- build_trans_sensitivity_comp <- function(data, comp_col, base_val) { -->
+
+<!--   # Note: we compare shares rather than counts, because the former is more directly -->
+<!--   # model-related. The latter can get swamped by different sizes of tracts (and -->
+<!--   # thus inflate correlations). -->
+<!--   data_sub <- data[j = c(keep_cols, "elig_share", "elig_share_se"), -->
+<!--                    with = FALSE] -->
+
+<!--   data_left <-  -->
+<!--     data_sub[get(comp_col) == base_val] %>%  -->
+<!--     select(-comp_col) %>%  -->
+<!--     rename(elig_base    = elig_share, -->
+<!--            elig_base_se = elig_share_se) %>%  -->
+<!--     mutate(base = glue("{comp_col} == {base_val}")) -->
+
+<!--   comp <-  -->
+<!--     data_left %>%  -->
+<!--     merge(data_sub[get(comp_col) != base_val]) %>%  -->
+<!--     .[j = `:=`(diff    = elig_share - elig_base, -->
+<!--                diff_se = sqrt(elig_share_se^2 + elig_base_se^2))] -->
+
+<!--   return(comp) -->
+<!-- } -->
+
+<!-- plot_trans_sensitivity_comp <- function(data, comp_col, base_val) { -->
+
+<!--   comp <- build_trans_sensitivity_comp(data, comp_col, base_val) -->
+
+<!--   comp %>%  -->
+<!--     ggplot( -->
+<!--       aes( -->
+<!--         x = elig_base, -->
+<!--         y = elig_share) -->
+<!--     ) + -->
+<!--     geom_point( -->
+<!--       alpha = 0.1 -->
+<!--     ) + -->
+<!--     geom_abline( -->
+<!--       color = "blue" -->
+<!--     ) + -->
+<!--     scale_x_continuous( -->
+<!--       labels = percent -->
+<!--     ) + -->
+<!--     scale_y_continuous( -->
+<!--       labels = percent -->
+<!--     ) + -->
+<!--     facet_wrap( -->
+<!--       as.formula(glue("~ {paste(setdiff(keep_cols, 'GEOID'), collapse = ' + ')}")) -->
+<!--     ) + -->
+<!--     labs( -->
+<!--       x = base_val -->
+<!--     ) + -->
+<!--     theme_minimal() -->
+
+<!-- } -->
+<!-- ``` -->
+
+<!-- ```{r compare SAE specifications for HS prediction} -->
+<!-- plot_trans_sensitivity_comp( -->
+<!--   nowcast_out[outcome_var == "incpov_le100_post_adj" & cps_base_recency == "most_recent" & age == "age_0to5"], -->
+<!--   comp_col = "sae_spec", -->
+<!--   base_val = "incpov_ctrls_mix") + -->
+<!--   labs( -->
+<!--     x = "Full Income/Poverty Controls, with Employment Adjustment", -->
+<!--     y = "Comparison Share Estimate" -->
+<!--   ) -->
+<!-- ``` -->
+
+<!-- ```{r compare SAE specifications for CCAP prediction} -->
+<!-- # plot_trans_sensitivity_comp(nowcast_out[outcome_var == glue("ccdf_elig_incratio_{local_ccdf_incratio_base}") & age == "age_0to5"], -->
+<!-- #                             comp_col = "sae_spec", -->
+<!-- #                             base_val = "ccdf_wk_pov") + -->
+<!-- #   labs(title = case_when(my_output_tag == "IL" ~ "For CCDF Eligibility, Work and Spouse Specification consistently produces lower estimates", -->
+<!-- #                          TRUE ~ ""), -->
+<!-- #        x = "Specification: Work and Poverty", -->
+<!-- #        y = "Specification: Work and Spouse Present") -->
+<!-- ``` -->
+
+<!-- ```{r compare CPS subsetting sensitivity for HS prediction - spec 1} -->
+<!-- plot_trans_sensitivity_comp(nowcast_out[outcome_var == "incpov_le100_post_adj" & sae_spec == "incpov_ctrls_mix" & age == "age_0to5"], -->
+<!--                             comp_col = "cps_geo_subsample", -->
+<!--                             base_val = "none") + -->
+<!--   labs(title = case_when(my_output_tag == "IL" ~ "For Head Start, Sensitivities Seem Reasonably Consistent, Except for Simplest Spec", -->
+<!--                          TRUE ~ ""), -->
+<!--        x = "No CPS Subsampling", -->
+<!--        y = "Use of only Metro Areas in CPS") -->
+<!-- ``` -->
+
+<!-- ```{r compare CPS subsetting sensitivity for HS prediction - spec 2} -->
+<!-- plot_trans_sensitivity_comp(nowcast_out[outcome_var == "incpov_le100_post_adj" & sae_spec == "incpov_ctrls_mix" & age == "age_0to5"], -->
+<!--                             comp_col = "cps_base_recency", -->
+<!--                             base_val = "most_recent") + -->
+<!--   labs(title = case_when(my_output_tag == "IL" ~ "For HS, Using the 2020 Baseline yields 25% lower eligibility estimates", -->
+<!--                          TRUE ~ ""), -->
+<!--        x = "Use of Most Recent CPS Months", -->
+<!--        y = "Use of CPS 2020 Baseline") -->
+<!-- ``` -->
+
+<!-- ```{r check correlations between SAE specifications for each other sensitivity} -->
+<!-- comp_sae <-  -->
+<!--   build_trans_sensitivity_comp(nowcast_out[age == "age_0to5"], -->
+<!--                                comp_col = "sae_spec", -->
+<!--                                base_val = "incpov_ctrls_mix") -->
+
+<!-- comp_sae[j = .(rho = cor(elig_base, elig_share)), -->
+<!--          by = .(sae_spec, outcome_var, cps_base_recency, cps_geo_subsample)] %>%  -->
+<!--   .[order(rho)] -->
+<!-- ``` -->
+
+<!-- ```{r scatterplot of differences and errors across specifications} -->
+<!-- ggplot(comp_sae[cps_base_recency == "most_recent" & cps_geo_subsample == "none"], -->
+<!--        aes(x = elig_base, -->
+<!--            y = diff, -->
+<!--            color = sae_spec)) + -->
+<!--   geom_point() + -->
+<!--   geom_errorbar(aes(ymin = diff - 1.96*diff_se, -->
+<!--                     ymax = diff + 1.96*diff_se), -->
+<!--                 width = .1) + -->
+<!--   geom_hline(yintercept = 0) + -->
+<!--   facet_wrap(~ sae_spec + outcome_var) + -->
+<!--   labs(x = "Base Estimate", -->
+<!--        y = "Diff: Spec vs Base", -->
+<!--        title = case_when(my_output_tag == "IL" ~ "", -->
+<!--                          TRUE ~ ""), -->
+<!--        subtitle = "For most recent CPS cohorts") + -->
+<!--   theme_minimal() + -->
+<!--   theme(legend.position = "bottom") -->
+<!-- ``` -->
+
+
+<!-- <!-- By outcome and method, which are statistically different from the "by 100%" with detailed controls? --> -->
+
+<!-- ```{r calculate percent of statistical differences between methods} -->
+<!-- comp_sae[j = .(pct_diff_stat_sig = mean(abs(diff/diff_se) > 1.96) %>% percent()), -->
+<!--                      by = .(sae_spec, outcome_var, cps_base_recency, cps_geo_subsample)] -->
+<!-- ``` -->
+
+<!-- <!-- How do the methods compare with respect to standard errors? --> -->
+
+<!-- ```{r} -->
+<!-- ggplot(comp_sae, -->
+<!--        aes(x = sae_spec, -->
+<!--            y = elig_share_se, -->
+<!--            color = sae_spec)) + -->
+<!--   #geom_violin() + -->
+<!--   geom_boxplot() + -->
+<!--   facet_grid(~ outcome_var, -->
+<!--              scales = "free") + -->
+<!--   theme_minimal() + -->
+<!--   theme(axis.text.x = element_text(angle = 90)) -->
+<!-- ``` -->
