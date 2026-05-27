@@ -110,7 +110,12 @@ write_agg_output <-
       #     ),
       #   by = "age") %>% 
       mutate(
-        Age = str_replace(age, "Age(\\d+)to(\\d+)", "Age \\1-\\2"),
+        Age = 
+          age %>% 
+          str_replace("Age(\\d+)to(\\d+)", "Age \\1-\\2") %>% 
+          str_replace("Age(\\d+)plus", "Age \\1\\+") %>% 
+          str_replace("^n", "") %>% 
+          sort_by_char_nums(),
         
         Outcome = 
           case_when(
@@ -879,15 +884,6 @@ story_map(
 
 ```
 
-
-<!-- /!\ Could also consider generating a series of maps to show the logical progression of 
-  ## ACS1 (PUMA)                    ... shows basic, baseline data
-  -> ACS5 (tract w/PUMA overlay)    ... shows heterogeneity, as a predictor for SAE 
-  -> SAE (tract with PUMA overlay)  ... shows SAE result
-  -> Now-cast (tract)               ... shows changes
-  -> geo aggregation                ... shows conversion to useful basis
-
--->
 
 ```{r if multiple ccdf cuts are specified -- contrast them statewide and at any geographic levels of focus}
 if (length(local_ccdf_incratio_cuts) > 1 && exists("map_geos")) {
