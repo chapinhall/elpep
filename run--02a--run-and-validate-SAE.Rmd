@@ -167,15 +167,9 @@ ggplot() +
 
 ```{r set specifications for sae}
 
-# sae_controls_incpov_stems <- 
-#   c(
-#     "rIncPov0to50",
-#     "rIncPov50to100",
-#     "rIncPov100to199",
-#     "rIncPov200to299",
-#     "rIncPov300to399",
-#     "rIncPov400plus"
-#   )
+# /*\ Note that there is significant discretion in choices that can be made in
+# these specifications, both for how ACS5 measures and crosstabbing with ages,
+# as well as the age partitions for ACS1 data are set
 
 sae_controls_incpov_stems <- 
   c(
@@ -204,9 +198,16 @@ sae_controls_workstatus <-
   c("rEmpl_Male", "rEmpl_Female",
     "rUnmarriedFemaleHh", "rUnmarriedMaleHh") # reference: "rMarried", 
 
-stopifnot(all(c(sae_controls_019_inc, sae_controls_019_incwork)   %in% colnames(acs5tract)))
-stopifnot(all(c(sae_controls_2064_inc, sae_controls_2064_incwork) %in% colnames(acs5tract)))
-stopifnot(all(c(sae_controls_65_inc,  sae_controls_65_incwork)    %in% colnames(acs5tract)))
+sae_controls_incwork_Age0to19 <- 
+  c(sae_controls_incpov_Age0to19, sae_controls_ed, sae_controls_workstatus)
+
+sae_controls_incwork_Age20to64 <- 
+  c(sae_controls_incpov_Age20to64, sae_controls_ed, sae_controls_workstatus)
+
+
+stopifnot(all(c(sae_controls_incpov_Age0to19,  sae_controls_incwork_Age0to19)  %in% colnames(acs5tract)))
+stopifnot(all(c(sae_controls_incpov_Age20to64, sae_controls_incwork_Age20to64) %in% colnames(acs5tract)))
+stopifnot(all(c(sae_controls_incpov_Age65plus)                                 %in% colnames(acs5tract)))
 
 sae_controls_018_inc        <- c(sae_controls_incpov_Age0to19, sae_controls_ed)
 sae_controls_018_incwork    <- c(sae_controls_incpov_Age0to19, sae_controls_ed, sae_controls_workstatus)
@@ -214,8 +215,8 @@ sae_controls_018_incwork    <- c(sae_controls_incpov_Age0to19, sae_controls_ed, 
 sae_controls_1925_inc       <- c(sae_controls_incpov_Age20to64, sae_controls_ed)
 sae_controls_1925_incwork   <- c(sae_controls_incpov_Age20to64, sae_controls_ed, sae_controls_workstatus)
 
-sae_controls_2644_inc       <- c(sae_controls_incpov_Age20to44, sae_controls_ed)
-sae_controls_2644_incwork   <- c(sae_controls_incpov_Age20to44, sae_controls_ed, sae_controls_workstatus)
+sae_controls_2644_inc       <- c(sae_controls_incpov_Age20to64, sae_controls_ed)
+sae_controls_2644_incwork   <- c(sae_controls_incpov_Age20to64, sae_controls_ed, sae_controls_workstatus)
 
 sae_controls_4564_inc       <- c(sae_controls_incpov_Age20to64, sae_controls_ed)
 sae_controls_4564_incwork   <- c(sae_controls_incpov_Age20to64, sae_controls_ed, sae_controls_workstatus)
@@ -303,7 +304,7 @@ acs5tract_sae_counts <-
     nAge19to25_se = 0,
     nAge26to44_se = 0,
     nAge45to64_se = 0,
-    nAge64plus_se = 0)
+    nAge65plus_se = 0)
 
 stopifnot(nrow(acs5tract_sae_counts) == nrow(acs5tract))
 ```
@@ -348,7 +349,9 @@ parallelize_sae <- FALSE
 
 inc_cat_field     <- "cFam_incpov_ratio_cat_with130"
 incwork_cat_field <- "cWork_incpov_status130"
-stopifnot(all(c(inc_cat_field, incwork_cat_field) %in% colnames(acs1_elig2064_sae)))
+# Check that these workhorse fields have been described property within the ACS1
+# data that each separate subset used in the SAE is drawn from
+stopifnot(all(c(inc_cat_field, incwork_cat_field) %in% colnames(acs1_elig)))
 
 
 if (parallelize_sae) {
@@ -395,12 +398,13 @@ if (parallelize_sae) {
   }
   
 } else {
-  
+  Sys.time()
   sae_results_018_inc  = run_saes_byCtrls(inc_cat_field, acs1_elig018_sae,    sae_controls_018_inc)
   sae_results_1925_inc = run_saes_byCtrls(inc_cat_field, acs1_elig1925_sae,   sae_controls_1925_inc)
   sae_results_2644_inc = run_saes_byCtrls(inc_cat_field, acs1_elig2644_sae,   sae_controls_2644_inc)
   sae_results_4564_inc = run_saes_byCtrls(inc_cat_field, acs1_elig4564_sae,   sae_controls_4564_inc)
-  sae_results_65_inc   = run_saes_byCtrls(inc_cat_field, acs1_elig65plus_sae, sae_controls_65plus_inc)
+  sae_results_65_inc   = run_saes_byCtrls(inc_cat_field, acs1_elig65plus_sae, sae_controls_65_inc)
+  Sys.time()
   
   # sae_results_019_inc  = run_saes_byCtrls(inc_cat_field, acs1_elig019_sae,    sae_controls_019_inc)
   # sae_results_2064_inc = run_saes_byCtrls(inc_cat_field, acs1_elig2064_sae,   sae_controls_2064_inc)
@@ -447,10 +451,17 @@ if (FALSE) {
 #### Examine the Estimated Composition of Tracts
 
 ```{r examine SAE share composition by tract -- FH estimates}
-plot_sae_comp_by_tract <- function(sae_est, base_cat, title) {
+plot_sae_comp_by_tract <- function(sae_est) {
   
   tract_order <- 
     sae_est %>% 
+    mutate(
+      vc_value = sort_by_char_nums(vc_value)
+    )
+  base_cat <- levels(tract_order$vc_value)[1]
+  
+  tract_order <- 
+    tract_order %>% 
     filter(vc_value == base_cat) %>% 
     arrange(-share_fh_trunc) %>%  
     mutate(
@@ -480,9 +491,9 @@ plot_sae_comp_by_tract <- function(sae_est, base_cat, title) {
       name = "Vulnerability Category"
     ) +
     labs(
-      title = title,
+      title = glue("Distribution of SAE Faye-Herriot Estimates for `{deparse(substitute(sae_est))}`"),
       x = glue("Tracts, in order of pop'n share in {base_cat}"),
-      y = "SAE estimated share"
+      y = "SAE estimated share (Faye-Herriot)"
     ) +
     theme(
       axis.text.x = element_blank()
@@ -491,104 +502,51 @@ plot_sae_comp_by_tract <- function(sae_est, base_cat, title) {
 ```
 
 
-```{r}
-# plot_sae_comp_by_tract(
-#   sae_controls_019_inc$sae_out,  
-#   base_cat = incpov_ref_value,
-#   title = "Base Income Cat Composition by Tract -- Ages 0-19"
-#   )
+```{r plot the distribution of estimated SAE values}
 
-plot_sae_comp_by_tract(
-  sae_results_2544_inc$sae_out,   
-  base_cat = incpov_ref_value, 
-  title = "Base Income Cat Composition by Tract -- Ages 25-44"
-)
+for (r in results) {
+  my_sae <- get(r)
 
-# plot_sae_comp_by_tract(
-#   sae_controls_019_inc$sae_out,   
-#   base_cat = "WorkEligThresh_0-75%", # /!\ Need to fix directly 
-#   title = "Income-by-Work Cat Composition by Tract -- Ages 0-19"
-# )
+  my_plot <- 
+    my_sae$sae_out %>% 
+    plot_sae_comp_by_tract()
+  
+  print(my_plot)
+}
 
-# plot_sae_comp_by_tract(
-#   sae_results_2064_incwork$sae_out,   
-#   base_cat = "WorkEligThresh_0%-75%", # /!\ Need to fix directly 
-#   title = "Income-by-Work Cat Composition by Tract -- Ages 20-64")
 ```
 
 #### Examine Aggregate Comparison Plots
 
-```{r compare sums of estimates to PUMA-level with observed PUMA values -- simple vs extended controls, results = "asis"}
-# for (spec in specs) {
-#   get(glue("sae_results_{spec}"))[["agg_comp"]]$agg_comp_plot %>% 
-#     print()
-# }
+```{r compare sums of estimates to PUMA-level with observed PUMA values}
 
-sae_results_2544_inc[["agg_comp_fh"]]$agg_comp_plot +
-  labs(
-    title = "PUMA-level SAE Estimates vs ACS1 Counts",
-    subtitle = "Inc-to-Pov, Ages 25-44, FH Estimates",
-    x = "Observed ACS 1-year Counts"
-  ) 
-
-sae_results_2544_inc[["agg_comp_model"]]$agg_comp_plot +
-  labs(
-    title = "PUMA-level SAE Estimates vs ACS1 Counts",
-    subtitle = "Inc-to-Pov, Ages 25-44, Model Estimates",
-    x = "Observed ACS 1-year Counts"
-  ) 
-
-# sae_results_2064_incwork[["agg_comp_fh"]]$agg_comp_plot +
-#   labs(
-#     title = "PUMA-level SAE Estimates vs ACS1 Counts",
-#     subtitle = "Inc-to-Pov and Work, Ages 20-64, FH Estimates",
-#     x = "Observed ACS 1-year Counts"
-#   ) 
-# 
-# sae_results_2064_incwork[["agg_comp_model"]]$agg_comp_plot +
-#   labs(
-#     title = "PUMA-level SAE Estimates vs ACS1 Counts",
-#     subtitle = "Inc-to-Pov and Work, Ages 20-64, Model Estimates",
-#     x = "Observed ACS 1-year Counts"
-#   ) 
-
+for (r in results) {
+  my_sae <- get(r)
+  
+  fh_plot <- 
+    my_sae[["agg_comp_fh"]]$agg_comp_plot +
+    labs(
+      title = "PUMA-level SAE Estimates vs ACS1 Counts",
+      subtitle = glue("From specification `{r}`"),
+      x = "Observed ACS 1-year Counts",
+      y = "Fay Herriott Estimates"
+    )
+  
+  model_plot <- 
+    my_sae[["agg_comp_model"]]$agg_comp_plot +
+    labs(
+      title = "PUMA-level SAE Estimates vs ACS1 Counts",
+      subtitle = glue("From specification `{r}`"),
+      x = "Observed ACS 1-year Counts",
+      y = "`Model-based` Estimates"
+    )
+  
+  print(fh_plot)
+  print(model_plot)
+}
 
 ```
 
-
-```{r compare correlations between puma-level observed and predicted values - fay herriot, eval = developer_mode}
-r3 <- function(x) round(x, 3)
-cbind(
-  sae_results_018_inc[["agg_comp_fh"]]$agg_comp_cor  %>% mutate(Age0to18  = r3(V1)) %>% select(-V1),
-  sae_results_1925_inc[["agg_comp_fh"]]$agg_comp_cor %>% mutate(Age19to25 = r3(V1)) %>% select(Age19to25),
-  sae_results_2644_inc[["agg_comp_fh"]]$agg_comp_cor %>% mutate(Age26to44 = r3(V1)) %>% select(Age26to44),
-  sae_results_4564_inc[["agg_comp_fh"]]$agg_comp_cor %>% mutate(Age45to64 = r3(V1)) %>% select(Age45to64),
-  sae_results_65_inc[["agg_comp_fh"]]$agg_comp_cor   %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus)
-  # sae_results_65plus_inc[["agg_comp_fh"]]$agg_comp_cor     %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
-  # sae_results_019_incwork[["agg_comp_fh"]]$agg_comp_cor    %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
-  # sae_results_2064_incwork[["agg_comp_fh"]]$agg_comp_cor   %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64),
-  # sae_results_65plus_incwork[["agg_comp_fh"]]$agg_comp_cor %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
-) %>% 
-  kable(caption = "Correlation of PUMA-level Observed and SAE Values from the Fay-Herriot Method")
-```
-
-```{r compare correlations between puma-level observed and predicted values - model, eval = developer_mode}
-cbind(
-  sae_results_018_inc[["agg_comp_model"]]$agg_comp_cor  %>% mutate(Age0to18  = r3(V1)) %>% select(-V1),
-  sae_results_1925_inc[["agg_comp_model"]]$agg_comp_cor %>% mutate(Age19to25 = r3(V1)) %>% select(Age19to25),
-  sae_results_2644_inc[["agg_comp_model"]]$agg_comp_cor %>% mutate(Age26to44 = r3(V1)) %>% select(Age26to44),
-  sae_results_4564_inc[["agg_comp_model"]]$agg_comp_cor %>% mutate(Age45to64 = r3(V1)) %>% select(Age45to64),
-  sae_results_65_inc[["agg_comp_model"]]$agg_comp_cor   %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus)
-  # sae_results_65plus_inc[["agg_comp_model"]]$agg_comp_cor     %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
-  # sae_results_019_incwork[["agg_comp_model"]]$agg_comp_cor    %>% mutate(Age0to19  = r3(V1)) %>% select(-V1),
-  # sae_results_2064_incwork[["agg_comp_model"]]$agg_comp_cor   %>% mutate(Age20to64 = r3(V1)) %>% select(Age20to64),
-  # sae_results_65plus_incwork[["agg_comp_model"]]$agg_comp_cor %>% mutate(Age65plus = r3(V1)) %>% select(Age65plus),
-) %>% 
-  kable(caption = "Correlation of PUMA-level Observed and SAE Values from the Fay-Herriot Method")
-  # Note that these estimates will naturally be below those of the FH method, which blends the 
-  # model estimates with the observe SAE values themselves
-  # But also, in a sense, this is a cleaner perspective on the results of the model
-```
 
 #### Redistribute SAE
 
@@ -597,6 +555,21 @@ Our non-canonical application of the SAE method requires several adjustments. Fi
 Second, because our model makes use of left-hand side quantities that have reduced variance, as PUMA-level aggregates rather than truly tract-level estimates, our SAE estimates become compressed. See below. 
 
 ```{r compare SAE estimate to acs5}
+
+# /*\ This is (currently) a highly bespoke comparison of SAE estimates to equivalent
+# values in the ACS5. In contrast to the comparisons above--of the SAE estimates to 
+# ACS1 values at the PUMA level, from which they are calibrated--this comparison
+# is intended to motivate the need to "decompress" the SAE estimates. To this
+# point, the ACS5 data have been used in an "auxiliary" role, i.e. of bringing
+# correlations between ACS5 measures and the larger ACS1 categories down to the
+# tract level. Now, we wish to build comparison to the values of the ACS5 fields
+# (not just rely on their correlations). However, this may require some manual
+# matching between the categories constructed in the ACS1 data and to those
+# reported in the ACS5 tables, both to find equivalent income cut points as well
+# as age ranges. 
+# Note -- this comparison will only be possible for income-only comparisons, as the 
+# ACS5 data does not have income-by-work status measures.
+
 compare_sae_lt125fpl <- function(sae_spec, title, xlab, ylab) {
   
   # To handle the fact that different age runs of the SAE use different age-specific
@@ -612,7 +585,6 @@ compare_sae_lt125fpl <- function(sae_spec, title, xlab, ylab) {
     ) %>% 
     # Build up ACS5 measure for comparison
     mutate(
-      # rIncPov0to125 = rIncPov0to50 + rIncPov50to75 + rIncPov75to99 + rIncPov100to124
       rIncPov0to125 = rIncPov0to75 + rIncPov75to125
     ) %>% 
     select(GEOID, share_fh_trunc, rIncPov0to125) %>% 
@@ -721,13 +693,6 @@ compare_sae_lt125fpl <- function(sae_spec, title, xlab, ylab) {
 # bias) for stability. The GMM method described in the "00" script would solve
 # the need to make this tradeoff, giving a more natural structure to the relationship
 # of PUMA-level measures, and tract-level predictors.
-# 
-# (Note that, previously, we saw more consistency in this diagnostic. We believe
-# that was erroneous, due to the fact that (1) ACS 5-year measures of overall poverty
-# rates were compared with SAE estimates that were properly estimated for ages
-# 0-5; and that (2) poverty rates for families with young children are higher
-# than those for other families. Thus, the compressed SAE estimates were compared
-# to a measure for a different population that featured more similarity.
 
 diagnostic_note <- 
   glue("NOTE: This comparison is not expected to show consistency, given\n",
@@ -745,7 +710,7 @@ compare_sae_lt125fpl(
   theme_minimal()
 
 compare_sae_lt125fpl(
-  sae_results_2544_inc$sae_out,
+  sae_results_2644_inc$sae_out,
   title = diagnostic_note,
   xlab = glue("{acs5_compression_measure}, Age 18-64"),
   ylab = glue("{sae_measure_label}, Ages 25-44")
@@ -753,7 +718,7 @@ compare_sae_lt125fpl(
   theme_minimal()
 
 compare_sae_lt125fpl(
-  sae_results_65plus_inc$sae_out,
+  sae_results_65_inc$sae_out,
   title = diagnostic_note,
   xlab = glue("{acs5_compression_measure}, Ages 65+"),
   ylab = glue("{sae_measure_label}, Ages 65+")
@@ -810,26 +775,35 @@ if (FALSE) {
   return_incpov_fields_bounds(0, 100)
   return_incpov_fields_bounds(1, 99)
   return_incpov_fields_bounds(0, 101)
+  return_incpov_fields_bounds(400, NA)
   return_incpov_fields_bounds(500, NA)
+  return_incpov_fields_bounds(600, NA)
 }
 ```
 
 ```{r notes for calculating program eligibility below}
-# Because we do not know the joint distribution of these income- and work-eligibility
-# phenomena, we use microdata for some calibration. We use the phi calculation of
-# correlation for bernoulli random variables, which is just the pearson correlation.
-# We first confirm that.
+# Because we do not know the joint distribution of income- and work-eligibility
+# rates at the tract level from the ACS5 itself, we use microdata for calibration.
+# We use the phi calculation of correlation for bernoulli random variables, which 
+# is just the pearson correlation. We first confirm that.
+
 if (FALSE) {
-  library(psych)
-  df <- data.frame(x = c(1, 1, 0, 1),
-                   y = c(1, 0, 0, 1))
+  if (!"psych" %in% installed.packages()[, "Package"]) install.packages("psych")
   
-  with(df, cor(x, y))
+  library(psych)
+  df <- data.frame(
+    x = c(1, 1, 0, 1),
+    y = c(1, 0, 0, 1)
+  )
+  
+  spearman_cor <- with(df, cor(x, y))
   
   mat <- matrix(c(2, 1, 0, 1), ncol = 2, byrow = TRUE)
-  phi(mat, digits = 7)
-  # This yields the same result
+  phi_stat <- phi(mat, digits = 7)
+  
+  stopifnot(abs(spearman_cor - phi_stat) < 0.0001) 
 }
+
 ```
 
 ```{r results = 'asis'}
@@ -848,7 +822,10 @@ make_acs5_equiv <- function(sae_ests, sae_age, only_hh_with_kids, verbose = FALS
   # vc values to match
   vc_vals <- unique(sae_ests$vc_value)
   
-  # age for subsetting
+  # Set ages for pulls and subsetting
+  # /*\ This mapping involves some discretion for how age groups estimated in
+  # the SAE are connected to ACS5 values. Even though the ACS5 may have 
+  # more granular measures, we 
   acs5_ages <- 
     case_when(
       # sae_age == "019"    ~ "Age0to17",
@@ -1041,23 +1018,25 @@ make_acs5_equiv <- function(sae_ests, sae_age, only_hh_with_kids, verbose = FALS
 }
 ```
 
-```{r run test of calculation of decompression statistics, results = 'asis'}
-if (developer_mode) {
+```{r run test of calculation of decompression statistics}
+if (FALSE) {
   # Some suppressed code to make interactive troubleshooting easier
   if (FALSE) {
       debug(make_acs5_equiv)
     undebug(make_acs5_equiv)
   }
-  sae_results_test_inc <- make_acs5_equiv(sae_results_2064_inc$sae_out, "2064", only_hh_with_kids = FALSE, verbose = TRUE)
+  sae_results_test_inc <- make_acs5_equiv(sae_results_2644_inc$sae_out, "2644", only_hh_with_kids = FALSE, verbose = TRUE)
   # sae_results_test_incwork <- make_acs5_equiv(sae_results_2064_incwork$sae_out, "2064", only_hh_with_kids = FALSE, verbose = TRUE)
 } 
 ```
 
 ```{r how much difference does use of phi vs phi_p make}
-if (developer_mode) {
+if (FALSE) {
   
   # Compare the results from using phi_p and phi
   # Hypothesis is that for smaller cells, the phi-derived estimates will be more stable
+  # /!\ This `sae_result` object needs to be set when income-by-work categories
+  # are estimated
   sae_results_test_incwork %>% 
     ggplot() +
     aes(
@@ -1083,11 +1062,13 @@ if (developer_mode) {
 
 
 ```{r compare acs5 estimates with sae estimates}
-if (developer_mode) {
+if (FALSE) {
   
   # Point is: the values should hopefully be basically consistent, but the 
   # variance of the acs5 should be substantially higher, which is what we rely
   # on for decompressing the sae estimates
+  # /!\ This `sae_result` object needs to be set when income-by-work categories
+  # are estimated
   sae_results_test_incwork %>% 
     mutate(
       .by = vc_value,
@@ -1115,99 +1096,9 @@ if (developer_mode) {
 ```
 
 
-```{r Compare ACS1 and ACS5 at the PUMA level}
-
-if (developer_mode) {
-  
-  # As a reality check, see if the ACS5 estimates are basically consistent with
-  # calculations from the ACS1 microdata. Both the lag of the former and general
-  # sampling variation would cause some disagreement even if the assumptions
-  # were basically correct. Still, we hope for some strong correspondence in
-  # aggregate.
-  prog_inc_thresh_fpl <- get_fpl_thresh_for_prog()
-  acs1_ccdf_p <- 
-    acs1_elig %>% 
-    .[between(AGEP, 0, 6),
-      j = .(acs1_ccdf = 
-              sum(PWGTP[fam_incpov_ratio < ccdf_inc_thresh_fpl/100 & 
-                          bAdults_all_workThresh_sch == TRUE]) / sum(PWGTP),
-            acs1_ccdf_inc  = sum(PWGTP[fam_incpov_ratio < ccdf_inc_thresh_fpl/100]) / sum(PWGTP),
-            acs1_ccdf_work = sum(PWGTP[bAdults_all_workThresh_sch == TRUE])                       / sum(PWGTP)),
-      by = PUMA] %>% 
-    .[j = acs1_ccdf_indep := acs1_ccdf_inc*acs1_ccdf_work]
-
-  
-  # Examine estimates of CCDF eligibility
-  sae_results_ccdf_test %>% 
-    filter(vc_value %in% c("WorkElig_0%-100%", glue("WorkElig_100%-{ccdf_inc_thresh_fpl}%"))) %>% 
-    summarize(acs5_ccdf = sum(share_acs5),
-              acs5_ccdf_w = sum(wAcs5),
-              .by = GEOID) %>%  
-    merge(geo_crosswalk %>% select(GEOID, PUMA) %>% unique(),
-          by = "GEOID") %>% 
-    summarize(acs5_ccdf = weighted.mean(acs5_ccdf, acs5_ccdf_w),
-              .by = PUMA) %>% 
-    merge(acs1_ccdf_p,
-          by = "PUMA") %>% 
-    ggplot(aes(x = acs1_ccdf,
-               y = acs5_ccdf)) +
-    geom_abline() +
-    geom_hline(yintercept = 0) +
-    geom_vline(xintercept = 0) +
-    geom_point() +
-    geom_smooth() +
-    labs(title    = "Comparison of PUMA-level CCDF Estimates from ACS5 vs ACS1",
-         subtitle = "Expectations: although they likely won't line up, there's ideally decent correspondence")
-  
-  # Examine income eligibility at the PUMA level
-  acs5_incpov_byage %>% 
-    filter(age == "Age0to6", 
-           inc_to_pov_ratio %like% "0to50|50to|75to|100to|125to|150to|175to|185to") %>% 
-    summarize(acs5_ccdf_inc   = sum(r),
-              acs5_ccdf_inc_w = mean(w),
-              .by = GEOID) %>%  
-    merge(geo_crosswalk %>% select(GEOID, PUMA) %>% unique(),
-          by = "GEOID") %>% 
-    summarize(acs5_ccdf_inc = weighted.mean(acs5_ccdf_inc, acs5_ccdf_inc_w),
-              .by = PUMA) %>% 
-    merge(acs1_ccdf_p,
-          by = "PUMA") %>% 
-    ggplot(aes(x = acs1_ccdf_inc,
-               y = acs5_ccdf_inc)) +
-    geom_abline() +
-    geom_hline(yintercept = 0) +
-    geom_vline(xintercept = 0) +
-    geom_point() +
-    geom_smooth() +
-    labs(title    = "Comparison of PUMA-level CCDF Income Estimates from ACS5 vs ACS1",
-         subtitle = "Expectations: although they likely won't line up, there's ideally decent correspondence")
-  
-  acs5_workelig_withKids %>% 
-    filter(status == "WorkEligFam") %>% 
-    merge(geo_crosswalk %>% select(GEOID, PUMA) %>% unique(),
-          by = "GEOID") %>% 
-    summarize(acs5_ccdf_work = weighted.mean(r, w),
-              .by = PUMA) %>% 
-    merge(acs1_ccdf_p,
-          by = "PUMA") %>% 
-    ggplot(aes(x = acs1_ccdf_work,
-               y = acs5_ccdf_work)) +
-    geom_abline() +
-    geom_hline(yintercept = 0) +
-    geom_vline(xintercept = 0) +
-    geom_point() +
-    geom_smooth() +
-    labs(title    = "Comparison of PUMA-level CCDF Work Eligibility Estimates from ACS5 vs ACS1",
-         subtitle = "Expectations: although they likely won't line up, there's ideally decent correspondence")
-}
-```
-
-
-```{r calculate variance of acs5 analogs to each income-to-poverty measure}
+```{r prepare population data for merging to estimates}
 pop_long <- 
   pop_age_t_calib %>% 
-  #filter(year == base_year) %>% 
-  # rename(GEOID = GEOID_TR20) %>% 
   pivot_longer(
     cols = -c(GEOID, year, age_var)
   ) %>% 
@@ -1244,10 +1135,13 @@ if (FALSE) {
   debug(redis_sae)
   undebug(redis_sae)
  
-  sae_redis_incpov <- redis_sae(sae_results_2064_inc, "2064", only_hh_with_kids = FALSE)
-    View(sae_redis_incpov$sae_out_decompress, "redis_inc")
-    sae_redis_incpov$sae_out_decompress %>% select(GEOID, vc_value, matches("^share|^infl")) %>% View("check_sae_redis")
-  # sae_redis_incwork <- redis_sae(sae_results_2064_incwork, "2064");
+  sae_redis_incpov <- redis_sae(sae_results_2644_inc, "2644", only_hh_with_kids = FALSE)
+  
+  View(sae_redis_incpov$sae_out_decompress, "redis_inc")
+  sae_redis_incpov$sae_out_decompress %>% 
+    select(GEOID, vc_value, matches("^share|^infl")) %>% 
+    View("check_sae_redis")
+  # sae_redis_incwork <- redis_sae(sae_results_2644_incwork, "2644");
   #   View(sae_redis_incwork$sae_out_decompress, "redis_incwork")
 }
 
@@ -1258,21 +1152,17 @@ redis_sae <- function(sae_to_redis, sae_age, only_hh_with_kids) {
   pop_age <- 
     case_match(
       sae_age,
-      "05"   ~ "0to5",
-      "612"  ~ "6to12",
+      # Prior age distinctions
       "019"  ~ "0to19", 
       "2064" ~ "20to64",
+      
+      # More recent specifications
       "018"  ~ "0to18",
       "1925" ~ "19to25",
       "2644" ~ "26to44",
       "4564" ~ "45to64",
       "65"   ~ "65plus"
     )
-  # acs_age <- 
-  #   case_when(
-  #     sae_age == "05"  ~ "lt6", 
-  #     sae_age == "612" ~ "6to11"
-  #   )
   
   redis_out <- 
     sae_to_redis_aug %>% 
@@ -1379,10 +1269,12 @@ for (spec in specs) {
 
 # Check on success
 if (FALSE) {
-  sub_cn(sae_results_2064_inc$sae_out_decompress, "_infl$")
-  sae_results_2064_inc$sae_out_decompress %>% 
-    select(GEOID, vc_value, 
-           share_model_trunc, share_model_redis_pct, share_model_redis_pct01_infl)
+  sub_cn(sae_results_2644_inc$sae_out_decompress, "_infl$")
+  sae_results_2644_inc$sae_out_decompress %>% 
+    select(
+      GEOID, vc_value, 
+      share_model_trunc, share_model_redis_pct, share_model_redis_pct01_infl
+    )
   
   # sub_cn(sae_results_2064_incwork$sae_out_decompress, "_infl$")
   # sae_results_2064_incwork$sae_out_decompress %>% 
@@ -1407,7 +1299,7 @@ if (rerun_sae | !file.exists(sae_out_file)) {
   
   # Save the bundle of objects
   save(
-    list = c(results, "specs", "incpov_ref_value", "sae_controls_list", "sae_aux_data_acs5"),
+    list = c(results, "specs", "sae_controls_list", "sae_aux_data_acs5"),
     file = sae_out_file
   )
   
@@ -1698,73 +1590,6 @@ ggplot(var_prop_acs5_sae,
   # See e.g. acs1_elig[between(AGEP, 0, 5), j = sum(PWGTP[fam_incpov_ratio_cat_by100 == "0%-100%"])/sum(PWGTP), by = PUMA]
 ```
 
-
-<!-- #### Adjust SAE Estimates to Match PUMA-level Aggregates -->
-
-<!-- Note: Although we have piloted the code to ex-post match SAE estimates to 
-align with the PUMA-level distribution of children across SAE target categories,
-the diagnostic check in the "examine PUMA-level counts" chunks above have 
-led us to believe that the sample data are too variable at that level to use as
-reliable anchors. -->
-
-```{r eval = FALSE}
-# This is not yet implemented, because many of the PUMA-level counts, especially
-# for the ccdf specifications, are too thin to match
-for (spec in specs) {
-  
-  my_spec_name <- glue("sae_results_{spec}")
-  my_spec <- get(my_spec_name)
-
-  my_spec_infl_puma_fh <- 
-    my_spec$agg_comp_fh$agg_comp_data %>% 
-    mutate(infl_factor_fh = obs_count_puma / sae_count_puma) %>% 
-    select(PUMA, vc_value = vulnerability_cat, infl_factor_fh)
-  
-  my_spec_infl_puma_model <- 
-    my_spec$agg_comp_model$agg_comp_data %>% 
-    mutate(infl_factor_model = obs_count_puma / sae_count_puma) %>% 
-    select(PUMA, vc_value = vulnerability_cat, infl_factor_model)
-  
-  
-  my_spec$sae_out <- 
-    my_spec$sae_out %>% 
-    merge(my_spec_infl_puma_fh,    by = c("PUMA", "vc_value")) %>% 
-    merge(my_spec_infl_puma_model, by = c("PUMA", "vc_value")) %>% 
-    # Use the inflation factor on the counts for both FH and model estimates
-    mutate(vc_fh_count_trunc_infl       = infl_factor_fh*vc_fh_count_trunc,
-           vc_fh_count_se_trunc_infl    = infl_factor_fh*vc_fh_count_se_trunc,
-           vc_model_count_trunc_infl    = infl_factor_model*vc_model_count_trunc,
-           vc_model_count_se_trunc_infl = infl_factor_model*vc_model_count_se_trunc) %>% 
-    # Recalculate the corresponding shares
-    group_by(GEOID) %>% 
-    mutate(share_fh_trunc_infl    = vc_fh_count_trunc_infl    / sum(vc_fh_count_trunc_infl),
-           share_model_trunc_infl = vc_model_count_trunc_infl / sum(vc_model_count_trunc_infl),
-           # Calculate ratios between the prior share calculation and the new one. 
-           # We use this to also inflate the accompanying SEs.
-           # /!\ This seems like the right approach, but deserves more formality
-           share_fh_trunc_infl_ratio    = share_fh_trunc_infl    / share_fh_trunc,
-           share_model_trunc_infl_ratio = share_model_trunc_infl / share_model_trunc,
-           share_fh_se_trunc_infl    = share_fh_se_trunc    * share_fh_trunc_infl_ratio,
-           share_model_se_trunc_infl = share_model_se_trunc * share_model_trunc_infl_ratio)  
-  assign(my_spec_name,
-         my_spec)
-}
-
-save(list = c(results, "specs", "incpov_ref_value", "sae_controls_list", "sae_aux_data_acs5"),
-       file = glue("{output_path}sae_sensitivity_estimates_final_{my_output_tag}.Rda"))
-
-# Check inflation worked
-if (FALSE) {
-  my_spec$sae_out %>% 
-    group_by(PUMA, vc_value) %>% 
-    summarize(fh_sum    = sum(vc_fh_count_trunc_infl),
-              model_sum = sum(vc_fh_count_trunc_infl)) %>% 
-    head()
-  head(my_spec$agg_comp_fh$agg_comp_data %>% select(PUMA, vulnerability_cat, obs_count_puma))
-  head(my_spec$agg_comp_model$agg_comp_data %>% select(PUMA, vulnerability_cat, obs_count_puma))
-}
-
-```
 
 
 #### Map Components of the SAE Estimates
