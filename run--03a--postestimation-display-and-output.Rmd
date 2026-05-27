@@ -30,10 +30,12 @@ load(file = glue("{output_path}cps_data_{my_output_tag}.Rda"))
 # If a county has been provided, we assume that it is for a higher density area,
 # and that the use of the 'metropolitan areas' subset of CPS data is appropriate
 nowcast_selected_sens <-
-  nowcast_out_trunc[cps_geo_subsample == ifelse(exists("my_county"), "metros", "none")]
+  nowcast_out_trunc %>% 
+  filter(
+    cps_geo_subsample == ifelse(exists("my_county"), "metros", "none")
+  )
 
 ```
-
 
 ```{r generate parallel constructions for base (sae) and nowcast}
 # Establish a general setup of parallel field names
@@ -71,12 +73,12 @@ nowcast_parallel_incpov_018_le130_205 <-
       )
   )
 
-nowcast_parallel_incpov_1964_le130_138 <- 
+nowcast_parallel_incpov_19plus_le130_138 <- 
   nowcast_parallel_setup %>% 
   filter(
     str_detect(outcome_var, "bIncpov_le(130|138)"),
     str_detect(sae_spec, "inc$"),
-    str_detect(age, "Age(19to25|26to44|45to64)")
+    str_detect(age, "Age(19to25|26to44|45to64|65plus)")
   ) %>% 
   mutate(
     base_share = share_0_75 + share_75_130
@@ -85,7 +87,7 @@ nowcast_parallel_incpov_1964_le130_138 <-
 bind_list <- 
   list(
     nowcast_parallel_incpov_018_le130_205,
-    nowcast_parallel_incpov_1964_le130_138
+    nowcast_parallel_incpov_19plus_le130_138
   )
 
 ```
@@ -246,6 +248,7 @@ nowcast_parallel_counts <-
 
 ```{r save results}
 save(
+  nowcast_parallel,
   nowcast_parallel_counts,
   most_recent_months, most_recent_sy_months, 
   pop_by_age_long_recency,
