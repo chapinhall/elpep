@@ -127,7 +127,8 @@ stopifnot(
 # for later reference
 acs5_keep_vars <- 
   c("GEOID", "COUNTYFIP",
-    "nAge0to19", "nAge20to64", "nAge65plus",
+    #"nAge0to19", "nAge20to64", "nAge65plus",
+    # /!\ Removing age data, since population counts are merged in separately
     transition_pred_vars_acs5, transition_pred_vars_toomit,
     sae_controls_list) %>% 
   unlist() %>% 
@@ -159,7 +160,7 @@ pop_for_nowcast <-
     nAge0to18_se  = 0,
     nAge19to25_se = 0,
     nAge26to44_se = 0,
-    nAge45to65_se = 0,
+    nAge45to64_se = 0,
     nAge65plus_se = 0
   )
   
@@ -628,8 +629,6 @@ compare_betas(
       cps_geo_subsample == "none"
     ),
   title = "Now-Casting Coefficients Predicting Head Start Elig: Conditional vs Unconditional",
-  subtitle = case_when(my_output_tag == "IL" ~ "",
-                       TRUE ~ ""),
   comp_var = "trans_spec",
   comp_var_label = "Control Specification"
 )
