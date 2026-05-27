@@ -9,7 +9,9 @@ To run this script--and consequently ELPEP:
 3. in the menu above go to "Code >> Run Region >> Run All"
 
 ```{r user specified-elpep customization file}
-elpep_customization_file <- "<full/path/to/the/Excel/file.xlsm>"
+
+elpep_customization_file <- "<your/excel/specfication/file/here/with/full/path.xlsm>"
+
 ```
 
 ```{r}
@@ -25,10 +27,26 @@ source("method--read-customization-file.R")
 ```
 
 ```{r}
+# This line loads functions used by multiple other scripts
 source("method--general-helper-functions.R")
-rmarkdown::render(
-  input = "run--00--main-doc.Rmd",
-  output_file = glue("{output_path}ELPEP Technical Report -- {my_state} -- {my_output_tag}.html"))
+```
+
+
+```{r}
+
+# Running the command in the following `if (FALSE)` block will run all of 
+# ELPEP's code and output all of the diagnostic checks in a stand-alone html file
+# However, we recommend running each ELPEP script file in seequence--i.e. 01a, 
+# 01b, ..., 02a, 02b, 03a, 03b, 03c--to pace out and monitor the run, and to
+# ensure clarity on the location of an issue if one arises
+
+if (FALSE) {
+  rmarkdown::render(
+    input = "run--00--main-doc.Rmd",
+    output_file = glue("{output_path}ELPEP Technical Report -- {my_state} -- {my_output_tag}.html")
+  )  
+}
+
 ```
 
 
