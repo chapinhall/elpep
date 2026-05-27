@@ -442,9 +442,23 @@ prog_inc_thresh_fpl <- get_fpl_thresh_for_prog()
 
 ```{r develop partitions of income and work eligibility for SAE}
 
-# /!\ This is is where ABAWD considerations could be built in, although those are
-# most consequentially reflected in CPS data as those constructions are what
-# define the ultimate targets
+# /*\ These constructions--i.e., the cFam_incpov and cWorkElig--play a major role 
+# in the SAE methods of 02a. Those methods estimate the quantity of individuals
+# that fit into each category. In turn, these estimated shares are used in the 
+# now-casting to estimate how many individuals end up within a specific program
+# eligibility class. Thus, considerations for building these are:
+# - These categories should differentiate income and work situations for individuals
+#   with particular detail below and above program eligibility thresholds
+# - These categories must be large enough that a reasonable proportion of the 
+#   ACS1 sample that falls into each category. Otherwise, it will be too "hard
+#   a target to hit" for the sAE estimation.
+# - Although the primary role for these categories is to be good predictors for 
+#   eventual eligibility status, it's nice if these categories line up with 
+#   the criteria themselves, or with ACS5 year data. In these cases, it's more
+#   possible to, respectively, see how the nowcasting changes the picture of 
+#   eligibility estimates, and to validate SAE estimates against ACS5 measures
+# 
+
 acs1_elig <- 
   acs1_family %>% 
   mutate(
