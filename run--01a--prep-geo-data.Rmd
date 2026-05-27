@@ -534,6 +534,8 @@ if (str_detect(my_output_tag, "CECIDS")) geo_objects <- c(geo_objects, "geo_cros
 
 
 ```{r save applicable GIS objects}
-save(list = geo_objects,
-     file = glue("{output_path}geo_data_{my_output_tag}.Rda"))
+save(
+  list = geo_objects,
+  file = glue("{output_path}geo_data_{my_output_tag}.Rda")
+)
 ```

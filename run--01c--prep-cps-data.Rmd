@@ -43,7 +43,8 @@ view_cps_fields <-
       )) {
     
     show_ipums_doc(
-      cps_documentation
+      cps_documentation,
+      fields = fields
     )
   }
 
