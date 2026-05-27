@@ -170,9 +170,9 @@ try(zctaShp   <-    zctas(cb = TRUE, year = tiger_year, starts_with = zcta_start
   # the zctas() function can only return by state for years 2000 and 2010 
 
 # Download school district file from Census using tigris package
-try(elShp <- school_districts(state = {my_state_fip}, type = 'elementary', year = tiger_year + 1), silent = T)
-try(scShp <- school_districts(state = {my_state_fip}, type = 'secondary',  year = tiger_year + 1), silent = T)
-try(unShp <- school_districts(state = {my_state_fip}, type = 'unified',    year = tiger_year + 1), silent = T)
+try(elShp <- school_districts(state = my_state_fip, type = 'elementary', year = tiger_year + 1), silent = T)
+try(scShp <- school_districts(state = my_state_fip, type = 'secondary',  year = tiger_year + 1), silent = T)
+try(unShp <- school_districts(state = my_state_fip, type = 'unified',    year = tiger_year + 1), silent = T)
 
 # Clean data
 schoolShp <- 
@@ -525,7 +525,7 @@ if (str_detect(my_output_tag, "IECAM")) {
 ```
 
 ```{r collect and save GIS data}
-geo_objects <- c("my_state_fip", "geo_crosswalk", "geo_crosswalk_zcta", "geo_crosswalk_sd", "tractShp", "pumaShp", "countyShp", "zctaShp", "schoolShp", "leaflet_base_map")
+geo_objects <- c("my_state_fip", "geo_crosswalk", "geo_crosswalk_zcta", "geo_crosswalk_sd", "tractShp", "pumaShp", "countyShp", "zctaShp", "schoolShp")
 if (exists("auxShp"))        geo_objects <- c(geo_objects, "auxShp", "geo_crosswalk_aux")
 if (exists("my_county_fip")) geo_objects <- c(geo_objects, "my_county_fip")
 if (str_detect(my_output_tag, "IECAM"))  geo_objects <- c(geo_objects, "geo_crosswalk_b5")
