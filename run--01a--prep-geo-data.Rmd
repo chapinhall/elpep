@@ -179,11 +179,6 @@ schoolShp <-
   bind_rows(elShp %>% mutate(level = "elementary"), 
             unShp %>% mutate(level = "unified"))
 
-# schoolShp_sec_included <- 
-#   bind_rows(elShp %>% mutate(level = "elementary"), 
-#             scShp %>% mutate(level = "secondary"),
-#             unShp %>% mutate(level = "unified"))
-
 # Display school district shapefile
 ggplot() + 
   geom_sf(data = schoolShp,
